@@ -2,6 +2,11 @@ name = "workshop-game"
 main = "src/index.ts"
 compatibility_date = "2024-12-01"
 
+[[kv_namespaces]]
+binding = "AUTH_KV"
+id = "placeholder-replace-before-deploy"
+preview_id = "placeholder-replace-before-deploy"
+
 [[durable_objects.bindings]]
 name = "GAME_ROOM"
 class_name = "GameRoom"

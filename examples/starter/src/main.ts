@@ -2,6 +2,7 @@ import { GameClient } from '@workshop/sdk';
 import type { GameState } from '@workshop/sdk';
 
 const GAME_URL = import.meta.env.VITE_GAME_URL as string | undefined;
+const AGENT_TOKEN = import.meta.env.VITE_AGENT_TOKEN as string | undefined;
 
 if (!GAME_URL) {
   document.body.innerHTML = `
@@ -14,14 +15,30 @@ if (!GAME_URL) {
   throw new Error('VITE_GAME_URL is not set');
 }
 
+function decodeTokenName(token: string): string | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return typeof payload.name === 'string' ? payload.name : null;
+  } catch {
+    return null;
+  }
+}
+
 const GRID_SIZE = 20;
-const client = new GameClient(GAME_URL);
+const gameUrl = AGENT_TOKEN ? `${GAME_URL}?token=${encodeURIComponent(AGENT_TOKEN)}` : GAME_URL;
+const client = new GameClient(gameUrl);
 
 // DOM refs
 const nameScreen   = document.getElementById('name-screen')!;
 const gameScreen   = document.getElementById('game-screen')!;
 const nameInput    = document.getElementById('name-input') as HTMLInputElement;
 const joinBtn      = document.getElementById('join-btn') as HTMLButtonElement;
+
+// Pre-fill name from JWT token if present
+const tokenName = AGENT_TOKEN ? decodeTokenName(AGENT_TOKEN) : null;
+if (tokenName) nameInput.value = tokenName;
 const progressBar  = document.getElementById('progress-bar')!;
 const progressText = document.getElementById('progress-text')!;
 const playerCount  = document.getElementById('player-count')!;

@@ -2,12 +2,259 @@ import { GameRoom } from './game-room';
 
 interface Env {
   GAME_ROOM: DurableObjectNamespace;
+  AUTH_KV: KVNamespace;
+  RESEND_API_KEY?: string;
+  FROM_EMAIL?: string;
+  JWT_SECRET: string;
 }
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
 };
+
+// --- Email Adapter ---
+
+interface EmailPayload {
+  to: string;
+  subject: string;
+  html: string;
+  link: string;
+}
+
+interface EmailAdapter {
+  send(payload: EmailPayload): Promise<void>;
+}
+
+class ResendAdapter implements EmailAdapter {
+  constructor(private apiKey: string, private from: string) {}
+
+  async send({ to, subject, html }: EmailPayload): Promise<void> {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ from: this.from, to, subject, html }),
+    });
+    if (!res.ok) throw new Error(`Resend error: ${res.status}`);
+  }
+}
+
+class LocalAdapter implements EmailAdapter {
+  constructor(private kv: KVNamespace) {}
+
+  async send(payload: EmailPayload): Promise<void> {
+    await this.kv.put(
+      `inbox:${crypto.randomUUID()}`,
+      JSON.stringify({ ...payload, sentAt: new Date().toISOString() }),
+      { expirationTtl: 3600 }
+    );
+  }
+}
+
+function makeAdapter(env: Env): EmailAdapter {
+  return env.RESEND_API_KEY
+    ? new ResendAdapter(env.RESEND_API_KEY, env.FROM_EMAIL ?? 'noreply@workshop.local')
+    : new LocalAdapter(env.AUTH_KV);
+}
+
+// --- Pure Helpers ---
+
+function isAllowedDomain(email: string): boolean {
+  const domain = email.split('@')[1];
+  return domain === 'drugbank.com' || domain === 'twosmiles.ca';
+}
+
+function parseName(email: string): string {
+  const [local, domain] = email.split('@');
+  if (domain === 'drugbank.com') {
+    const [first, last] = local.split('.');
+    if (!first) return email;
+    const firstName = first[0].toUpperCase() + first.slice(1).toLowerCase();
+    const lastInitial = last ? last[0].toUpperCase() : '';
+    return lastInitial ? `${firstName} ${lastInitial}` : firstName;
+  }
+  // twosmiles.ca: music+name@twosmiles.ca → name; no plus → Admin
+  const plusIdx = local.indexOf('+');
+  if (plusIdx === -1 || !local.slice(plusIdx + 1)) return 'Admin';
+  const tag = local.slice(plusIdx + 1);
+  return tag[0].toUpperCase() + tag.slice(1).toLowerCase();
+}
+
+function bytesToB64url(bytes: Uint8Array): string {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+}
+
+async function createJWT(payload: Record<string, unknown>, secret: string): Promise<string> {
+  const enc = new TextEncoder();
+  const header = bytesToB64url(enc.encode(JSON.stringify({ alg: 'HS256', typ: 'JWT' })));
+  const body = bytesToB64url(enc.encode(JSON.stringify(payload)));
+  const data = `${header}.${body}`;
+  const key = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(data));
+  return `${data}.${bytesToB64url(new Uint8Array(sig))}`;
+}
+
+// --- HTML Templates ---
+
+const expiredHtml = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Link Expired</title>
+<style>
+  body { font-family: monospace; background: #0f172a; color: #94a3b8;
+         display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+  .card { background: #1e293b; padding: 2rem 3rem; border-radius: 1rem; text-align: center; max-width: 400px; }
+  h1 { color: #ef4444; margin-bottom: 0.5rem; }
+  p { margin: 0.5rem 0; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Link Expired</h1>
+    <p>This magic link has already been used or has expired.</p>
+    <p>Please restart the terminal setup script.</p>
+  </div>
+</body>
+</html>`;
+
+const successHtml = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Authenticated!</title>
+<style>
+  body { font-family: monospace; background: #0f172a; color: #94a3b8;
+         display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+  .card { background: #1e293b; padding: 2rem 3rem; border-radius: 1rem; text-align: center; max-width: 400px; }
+  .check { font-size: 3rem; margin-bottom: 1rem; }
+  h1 { color: #22c55e; margin-bottom: 0.5rem; }
+  p { margin: 0.5rem 0; }
+  .sub { color: #475569; margin-top: 1rem; font-size: 0.85rem; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="check">✓</div>
+    <h1>Authenticated!</h1>
+    <p>You can now close this tab and return to your terminal window.</p>
+    <p class="sub">Your machine has been authorized for the workshop.</p>
+  </div>
+</body>
+</html>`;
+
+// --- Route Handlers ---
+
+async function handleAuthRequest(request: Request, env: Env): Promise<Response> {
+  let email: string;
+  try {
+    const body = (await request.json()) as { email?: string };
+    email = (body.email ?? '').trim();
+  } catch {
+    return Response.json({ error: 'Invalid JSON body' }, { status: 400, headers: CORS });
+  }
+
+  if (!email) {
+    return Response.json({ error: 'email is required' }, { status: 400, headers: CORS });
+  }
+  if (!isAllowedDomain(email)) {
+    return Response.json({ error: 'Email domain not permitted' }, { status: 403, headers: CORS });
+  }
+
+  const deviceCode = crypto.randomUUID();
+  const magicToken = crypto.randomUUID();
+  const origin = new URL(request.url).origin;
+  const magicLink = `${origin}/auth/verify?token=${magicToken}`;
+
+  await Promise.all([
+    env.AUTH_KV.put(
+      `device:${deviceCode}`,
+      JSON.stringify({ status: 'pending', email, agentToken: null }),
+      { expirationTtl: 600 }
+    ),
+    env.AUTH_KV.put(`magic:${magicToken}`, deviceCode, { expirationTtl: 600 }),
+  ]);
+
+  const adapter = makeAdapter(env);
+  try {
+    await adapter.send({
+      to: email,
+      subject: 'Workshop Authentication Link',
+      html: `<p>Click the link below to authenticate your machine for the workshop:</p>
+<p><a href="${magicLink}" style="font-size:1.2em">Authenticate your machine →</a></p>
+<p style="color:#666;font-size:0.85em">This link expires in 10 minutes. If you did not request this, ignore it.</p>`,
+      link: magicLink,
+    });
+  } catch {
+    return Response.json({ error: 'Failed to send email' }, { status: 500, headers: CORS });
+  }
+
+  const responseBody: Record<string, string> = { device_code: deviceCode };
+  if (!env.RESEND_API_KEY) {
+    responseBody.magic_link = magicLink;
+  }
+  return Response.json(responseBody, { headers: CORS });
+}
+
+async function handleAuthPoll(request: Request, env: Env): Promise<Response> {
+  const code = new URL(request.url).searchParams.get('code');
+  if (!code) {
+    return Response.json({ error: 'code is required' }, { status: 400, headers: CORS });
+  }
+  const raw = await env.AUTH_KV.get(`device:${code}`);
+  if (!raw) {
+    return Response.json({ status: 'expired' }, { status: 404, headers: CORS });
+  }
+  return Response.json(JSON.parse(raw), { headers: CORS });
+}
+
+async function handleAuthVerify(request: Request, env: Env): Promise<Response> {
+  const htmlHeaders = { 'Content-Type': 'text/html' };
+  const token = new URL(request.url).searchParams.get('token');
+  if (!token) return new Response(expiredHtml, { headers: htmlHeaders });
+
+  const deviceCode = await env.AUTH_KV.get(`magic:${token}`);
+  if (!deviceCode) return new Response(expiredHtml, { headers: htmlHeaders });
+
+  const existingRaw = await env.AUTH_KV.get(`device:${deviceCode}`);
+  if (!existingRaw) return new Response(expiredHtml, { headers: htmlHeaders });
+
+  const { email } = JSON.parse(existingRaw) as { email: string };
+  const name = parseName(email);
+  const now = Math.floor(Date.now() / 1000);
+  const agentToken = await createJWT(
+    { email, name, iat: now, exp: now + 604800 },
+    env.JWT_SECRET
+  );
+
+  await Promise.all([
+    env.AUTH_KV.put(
+      `device:${deviceCode}`,
+      JSON.stringify({ status: 'approved', email, name, agentToken }),
+      { expirationTtl: 600 }
+    ),
+    env.AUTH_KV.delete(`magic:${token}`),
+  ]);
+
+  return new Response(successHtml, { headers: htmlHeaders });
+}
+
+async function handleAuthInbox(env: Env): Promise<Response> {
+  if (env.RESEND_API_KEY) return new Response(null, { status: 404 });
+  const list = await env.AUTH_KV.list({ prefix: 'inbox:' });
+  const emails = await Promise.all(list.keys.map(k => env.AUTH_KV.get(k.name, 'json')));
+  return Response.json(emails.filter(Boolean), { headers: CORS });
+}
+
+// --- Main Handler ---
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -16,11 +263,17 @@ export default {
     }
 
     const { pathname } = new URL(request.url);
+    const method = request.method;
 
     if (pathname === '/ws') {
       const id = env.GAME_ROOM.idFromName('main-room');
       return env.GAME_ROOM.get(id).fetch(request);
     }
+
+    if (pathname === '/auth/request' && method === 'POST') return handleAuthRequest(request, env);
+    if (pathname === '/auth/poll' && method === 'GET') return handleAuthPoll(request, env);
+    if (pathname === '/auth/verify' && method === 'GET') return handleAuthVerify(request, env);
+    if (pathname === '/auth/inbox' && method === 'GET') return handleAuthInbox(env);
 
     return new Response(
       JSON.stringify({ status: 'ok', game: 'Workshop Pixel Art', ws: '/ws' }),
