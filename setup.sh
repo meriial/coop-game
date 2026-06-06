@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-WORKER_URL="${WORKER_URL:-https://workshop-game.YOUR-SUBDOMAIN.workers.dev}"
+WORKER_URL="${WORKER_URL:-https://workshop-game.music-abb.workers.dev}"
 REPO_URL="https://github.com/meriial/coop-game.git"
 CLONE_DIR="coop-game"
 
