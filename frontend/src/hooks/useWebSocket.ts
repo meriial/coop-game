@@ -26,7 +26,7 @@ const DEFAULT_STATE: WsState = {
 
 type OutgoingMsg = Record<string, unknown> & { type: string };
 
-export function useWebSocket(url: string) {
+export function useWebSocket(url: string, disabled = false) {
   const [state, setState] = useState<WsState>(DEFAULT_STATE);
   const wsRef = useRef<WebSocket | null>(null);
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -106,13 +106,14 @@ export function useWebSocket(url: string) {
   }, [url]);
 
   useEffect(() => {
+    if (disabled) return;
     connect();
     return () => {
       if (retryRef.current) clearTimeout(retryRef.current);
       wsRef.current?.close();
       wsRef.current = null;
     };
-  }, [connect]);
+  }, [connect, disabled]);
 
   const send = useCallback((msg: OutgoingMsg) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {

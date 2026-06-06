@@ -34,15 +34,33 @@ function getToken(): string | null {
   return envToken ?? null;
 }
 
+function NotAuthenticated() {
+  return (
+    <div className="w-screen h-screen bg-slate-950 flex items-center justify-center">
+      <div className="flex flex-col items-center gap-3 text-slate-400 text-center max-w-sm px-6">
+        <p className="text-slate-200 text-lg font-semibold">Authentication required</p>
+        <p className="text-sm">Run the workshop setup script to join the presentation.</p>
+        <code className="mt-2 px-3 py-1.5 bg-slate-800 rounded text-indigo-300 text-xs font-mono">
+          bash &lt;(curl -fsSL https://raw.githubusercontent.com/meriial/coop-game/main/setup.sh)
+        </code>
+      </div>
+    </div>
+  );
+}
+
 export function App() {
   const token = useMemo(() => getToken(), []);
-  const wsUrl = token ? `${WS_BASE}/room/main?token=${encodeURIComponent(token)}` : `${WS_BASE}/room/main`;
-  const { state, send } = useWebSocket(wsUrl);
+  const wsUrl = `${WS_BASE}/room/main?token=${encodeURIComponent(token ?? '')}`;
+  const { state, send } = useWebSocket(wsUrl, !token);
   const myName = token ? decodeJwtName(token) : 'Guest';
 
   useEffect(() => {
     document.title = state.role === 'presenter' ? '🎤 Presenter — DrugBank Workshop' : 'DrugBank AI Workshop';
   }, [state.role]);
+
+  if (!token) {
+    return <NotAuthenticated />;
+  }
 
   if (!state.connected) {
     return (

@@ -295,17 +295,20 @@ export default {
 
     if (pathname.startsWith('/room/')) {
       const roomId = pathname.slice(6) || 'main';
+      const token = new URL(request.url).searchParams.get('token');
+      if (!token) {
+        return new Response('Unauthorized', { status: 401, headers: CORS });
+      }
       let role = 'participant';
       let email = '';
       let name = 'Guest';
-      const token = new URL(request.url).searchParams.get('token');
-      if (token) {
-        try {
-          const payload = await verifyJWT(token, env.JWT_SECRET);
-          email = payload.email;
-          name = payload.name;
-          role = email === env.ADMIN_EMAIL ? 'presenter' : 'participant';
-        } catch { /* bad token → participant */ }
+      try {
+        const payload = await verifyJWT(token, env.JWT_SECRET);
+        email = payload.email;
+        name = payload.name;
+        role = email === env.ADMIN_EMAIL ? 'presenter' : 'participant';
+      } catch {
+        return new Response('Unauthorized', { status: 401, headers: CORS });
       }
       const headers = new Headers(request.headers);
       headers.set('X-User-Role', role);
