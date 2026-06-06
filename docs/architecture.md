@@ -5,7 +5,7 @@
 ```
 Browser (participant's Vite app)
          │
-         │  WebSocket  wss://workshop-game.music-abb.workers.dev/ws
+         │  WebSocket  wss://workshop-game.YOUR-SUBDOMAIN.workers.dev/ws
          │
          ▼
 ┌─────────────────────────────────────────────┐
@@ -138,13 +138,13 @@ The `.devcontainer/` setup isolates Cursor's yolo-mode within Docker. Key detail
 |---|---|---|
 | Runtime | Miniflare (in-process) | Cloudflare edge |
 | DO storage | In-memory, resets on restart | SQLite-backed, persistent |
-| URL | `ws://localhost:8787/ws` | `wss://workshop-game.music-abb.workers.dev/ws` |
+| URL | `ws://localhost:8787/ws` | `wss://workshop-game.YOUR-SUBDOMAIN.workers.dev/ws` |
 | Canvas persists? | No | Yes |
 
 The `.env` file in `examples/starter/` holds both:
 ```
 DEV_VITE_GAME_URL=ws://localhost:8787/ws
-VITE_GAME_URL=wss://workshop-game.music-abb.workers.dev/ws
+VITE_GAME_URL=wss://workshop-game.YOUR-SUBDOMAIN.workers.dev/ws
 ```
 
 Switch between them by renaming the variable Vite reads (`VITE_GAME_URL`).
