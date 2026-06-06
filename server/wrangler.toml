@@ -4,8 +4,8 @@ compatibility_date = "2024-12-01"
 
 [[kv_namespaces]]
 binding = "AUTH_KV"
-id = "placeholder-replace-before-deploy"
-preview_id = "placeholder-replace-before-deploy"
+id = "76a9afa3c3db437495bf9041078637a8"
+preview_id = "8b35467cdcfd434cacd62dde5fdfbf99"
 
 [[durable_objects.bindings]]
 name = "GAME_ROOM"
