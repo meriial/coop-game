@@ -1,12 +1,10 @@
 # Workshop Pixel Art
 
-A cooperative real-time game for AI workshops. All players work together to paint a heart-shaped pixel art by clicking cells on a shared 20×20 canvas. The game is won when the canvas matches the target (100% progress).
-
-Each player is auto-assigned a unique color. Paint any unpainted target cell to contribute. Watch other participants' strokes appear in real-time.
+An interactive presentation platform and cooperative real-time game for AI workshops. The presenter drives a slide deck with live polls; everyone plays a cooperative pixel art game together to fill a heart-shaped canvas.
 
 ---
 
-## For participants
+## Setup (everyone)
 
 Run this single command in your terminal — it handles everything:
 
@@ -14,7 +12,11 @@ Run this single command in your terminal — it handles everything:
 bash <(curl -fsSL https://raw.githubusercontent.com/meriial/coop-game/main/setup.sh)
 ```
 
-You'll be prompted for your `@drugbank.com` or `@twosmiles.ca` email address. A magic link will arrive in your inbox — click it to authenticate, and your browser will open the game automatically.
+You'll be prompted for your `@drugbank.com` or `@twosmiles.ca` email. A magic link will arrive in your inbox — click it to authenticate, and your browser will open the presentation automatically.
+
+**What you see depends on who you are:**
+- **Participants** — slides sync in real-time, vote in polls, paint the pixel heart
+- **Organizer** (`music@twosmiles.ca`) — same view, plus a presenter control bar to advance slides, trigger polls, and reset the canvas
 
 **Requirements:** Node.js 18+, git, curl &nbsp;·&nbsp; pnpm is installed automatically if missing
 
@@ -106,14 +108,19 @@ pnpm exec wrangler deploy
 ### Local development
 
 ```bash
-# Create server/.dev.vars with:
-#   JWT_SECRET=any-local-value
-# (RESEND_API_KEY absent → fake inbox mode, magic links logged to /auth/inbox)
+# server/.dev.vars is already set up with a local JWT_SECRET and ADMIN_EMAIL.
+# No RESEND_API_KEY → magic links are stored locally instead of emailed.
 
 cd server && pnpm dev        # worker on http://localhost:8787
-WORKER_URL=http://localhost:8787 bash <(curl -fsSL https://raw.githubusercontent.com/meriial/coop-game/main/setup.sh)
-# Check http://localhost:8787/auth/inbox for the magic link
 ```
+
+Then in a second terminal, run setup pointed at localhost — the magic link prints directly in the terminal:
+
+```bash
+WORKER_URL=http://localhost:8787 bash <(curl -fsSL https://raw.githubusercontent.com/meriial/coop-game/main/setup.sh) music@twosmiles.ca
+```
+
+This authenticates you, writes your token to `frontend/.env`, and opens `http://localhost:5174` as the presenter. Open a second browser window at `http://localhost:5174` (in a private/incognito window with no token) to see the participant view.
 
 ### Reset the canvas between rounds
 
