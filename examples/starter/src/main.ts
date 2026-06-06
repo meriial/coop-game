@@ -105,18 +105,10 @@ function updateUI(state: GameState) {
   if (state.progress === 100) victory.style.display = 'block';
 }
 
-nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') joinBtn.click(); });
-
-joinBtn.addEventListener('click', async () => {
-  const name = nameInput.value.trim();
-  if (!name) return;
-
+async function joinGame(name: string) {
   joinBtn.disabled = true;
   joinBtn.textContent = 'Connecting…';
-
-  // Register callback before connect so the first state update reaches updateUI
   client.onStateUpdate(updateUI);
-
   try {
     await client.connect(name);
     nameScreen.style.display = 'none';
@@ -127,4 +119,10 @@ joinBtn.addEventListener('click', async () => {
     joinBtn.textContent = 'Join';
     client.disconnect();
   }
-});
+}
+
+nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') joinBtn.click(); });
+joinBtn.addEventListener('click', () => { const name = nameInput.value.trim(); if (name) joinGame(name); });
+
+// Auto-join immediately when a valid token is present
+if (tokenName) joinGame(tokenName);
