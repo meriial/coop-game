@@ -57,18 +57,21 @@ if [ "${DRY_RUN:-0}" != "1" ]; then
   cd "$CLONE_DIR"
 fi
 
-# Derive WebSocket game URL from WORKER_URL and write both vars to .env
-GAME_URL=$(printf '%s' "$WORKER_URL" | sed 's|^https://|wss://|;s|^http://|ws://|')/ws
+# Derive URLs from WORKER_URL
+WS_URL=$(printf '%s' "$WORKER_URL" | sed 's|^https://|wss://|;s|^http://|ws://|')
+GAME_URL="$WS_URL/ws"
+
+# Write token to both apps
 printf 'VITE_GAME_URL=%s\nVITE_AGENT_TOKEN=%s\n' "$GAME_URL" "$TOKEN" > examples/starter/.env
-echo "Token written to examples/starter/.env"
+printf 'VITE_SERVER_URL=%s\nVITE_WS_URL=%s\nVITE_AGENT_TOKEN=%s\n' "$WORKER_URL" "$WS_URL" "$TOKEN" > frontend/.env
+echo "Token written."
 
 if [ "${DRY_RUN:-0}" = "1" ]; then exit 0; fi
 
-# 5. Install deps (requires pnpm — install it if missing) + launch starter app
+# 5. Install deps (requires pnpm — install it if missing) + launch presentation
 if ! command -v pnpm > /dev/null 2>&1; then
   echo "Installing pnpm..."
   npm install -g pnpm
 fi
 pnpm install
-cd examples/starter
-pnpm dev
+pnpm --filter frontend dev
