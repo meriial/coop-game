@@ -41,6 +41,7 @@ export class GameRoom {
   private canvas: (string | null)[][];
   private colorIndex = 0;
   private players = new Map<string, Player>();
+  private connections = new Map<string, WebSocket>();
 
   constructor(private readonly ctx: DurableObjectState) {
     this.canvas = Array.from({ length: GRID_SIZE }, () =>
@@ -58,17 +59,34 @@ export class GameRoom {
     if (request.headers.get('Upgrade') !== 'websocket') {
       return new Response('Expected WebSocket upgrade', { status: 426 });
     }
+
     const [client, server] = Object.values(new WebSocketPair());
     const playerId = crypto.randomUUID();
-    this.ctx.acceptWebSocket(server, [playerId]);
+
+    server.accept();
+    this.connections.set(playerId, server);
+
+    server.addEventListener('message', (event: MessageEvent) => {
+      this.handleMessage(server, playerId, event.data as string);
+    });
+
+    server.addEventListener('close', () => {
+      this.connections.delete(playerId);
+      this.players.delete(playerId);
+      this.broadcast(this.buildStateMsg());
+    });
+
+    server.addEventListener('error', () => {
+      this.connections.delete(playerId);
+      this.players.delete(playerId);
+    });
+
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
-    const playerId = ws.getTags()[0];
+  private handleMessage(ws: WebSocket, playerId: string, text: string): void {
     let msg: ClientMsg;
     try {
-      const text = typeof message === 'string' ? message : new TextDecoder().decode(message);
       msg = JSON.parse(text) as ClientMsg;
     } catch {
       ws.send(JSON.stringify({ type: 'error', message: 'Invalid JSON' } satisfies ServerMsg));
@@ -78,7 +96,7 @@ export class GameRoom {
     if (msg.type === 'join') {
       const color = PLAYER_COLORS[this.colorIndex % PLAYER_COLORS.length];
       this.colorIndex++;
-      await this.ctx.storage.put('colorIndex', this.colorIndex);
+      void this.ctx.storage.put('colorIndex', this.colorIndex);
       this.players.set(playerId, { id: playerId, name: msg.name.slice(0, 30), color });
       this.broadcast(this.buildStateMsg());
     } else if (msg.type === 'paint') {
@@ -90,23 +108,14 @@ export class GameRoom {
       const { x, y } = msg;
       if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE || !TARGET[y][x]) return;
       this.canvas[y][x] = player.color;
-      await this.ctx.storage.put('canvas', this.canvas);
+      void this.ctx.storage.put('canvas', this.canvas);
       this.broadcast(this.buildStateMsg());
     }
   }
 
-  async webSocketClose(ws: WebSocket): Promise<void> {
-    this.players.delete(ws.getTags()[0]);
-    this.broadcast(this.buildStateMsg());
-  }
-
-  async webSocketError(ws: WebSocket): Promise<void> {
-    this.players.delete(ws.getTags()[0]);
-  }
-
   private broadcast(msg: ServerMsg): void {
     const text = JSON.stringify(msg);
-    for (const ws of this.ctx.getWebSockets()) {
+    for (const ws of this.connections.values()) {
       try { ws.send(text); } catch { /* ignore closed sockets */ }
     }
   }

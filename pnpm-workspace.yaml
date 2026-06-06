@@ -2,3 +2,11 @@ packages:
   - 'server'
   - 'sdk'
   - 'examples/*'
+
+allowBuilds:
+  esbuild: true
+  sharp: true
+  workerd: true
+
+# Disable release-age supply-chain check — packages resolve immediately after publish
+minimumReleaseAge: 0

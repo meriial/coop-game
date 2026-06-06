@@ -5,10 +5,30 @@
     "context": ".."
   },
   "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "mounts": [
+    {
+      "source": "workshop-game-nodemodules",
+      "target": "/workspaces/${localWorkspaceFolderBasename}/node_modules",
+      "type": "volume"
+    }
+  ],
   "postCreateCommand": "pnpm install",
   "forwardPorts": [5173, 8787],
+  "portsAttributes": {
+    "5173": {
+      "label": "Web app (Vite)",
+      "onAutoForward": "notify"
+    },
+    "8787": {
+      "label": "Game server (Wrangler)",
+      "onAutoForward": "silent"
+    }
+  },
   "customizations": {
     "vscode": {
+      "settings": {
+        "remote.autoForwardPorts": true
+      },
       "extensions": [
         "ms-vscode.vscode-typescript-next",
         "dbaeumer.vscode-eslint",

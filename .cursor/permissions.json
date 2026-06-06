@@ -1,0 +1,38 @@
+{
+  // Workshop repo: generous auto-run for routine dev, guardrails for deploy/destructive ops.
+  // Requires Run Mode enabled in Cursor Settings (Auto-review recommended).
+  "terminalAllowlist": [
+    "pnpm",
+    "git status",
+    "git diff",
+    "git log",
+    "git show",
+    "git branch",
+    "ls",
+    "cat",
+    "head",
+    "tail",
+    "wc",
+    "pwd",
+    "grep",
+    "rg",
+    "find",
+    "node",
+    "npx",
+    "wrangler dev",
+    "wrangler type-check",
+    "tsc"
+  ],
+  "autoRun": {
+    "allow_instructions": [
+      "Routine workshop dev: pnpm install, pnpm dev:starter, pnpm dev:server, vite build/preview, and wrangler dev or type-check.",
+      "Read-only git inspection: status, diff, log, show, and branch.",
+      "Read-only workspace inspection: listing, searching, and viewing files under the repo."
+    ],
+    "block_instructions": [
+      "Require approval before pnpm deploy, wrangler deploy, or any production/publish step.",
+      "Require approval before modifying .env files or writing secrets.",
+      "Require approval before destructive git commands (push --force, reset --hard, clean -fd, rebase)."
+    ]
+  }
+}
