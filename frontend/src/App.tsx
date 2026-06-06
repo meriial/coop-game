@@ -3,7 +3,7 @@ import { useWebSocket } from './hooks/useWebSocket';
 import { PresenterApp } from './PresenterApp';
 import { ParticipantApp } from './ParticipantApp';
 
-const WS_BASE = (import.meta.env.VITE_WS_URL as string | undefined) ??
+const WS_BASE = (import.meta.env.VITE_WS_URL as string | undefined) ||
   `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`;
 const TOKEN_KEY = 'presenter_token';
 
@@ -32,7 +32,7 @@ function getToken(): string | null {
   if (stored) return stored;
   // 3. Env var baked in at build/dev time (written by dev.sh)
   const envToken = import.meta.env.VITE_AGENT_TOKEN as string | undefined;
-  return envToken ?? null;
+  return envToken || null;
 }
 
 function NotAuthenticated() {
