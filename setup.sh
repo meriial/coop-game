@@ -2,7 +2,8 @@
 set -euo pipefail
 
 WORKER_URL="${WORKER_URL:-https://workshop-game.YOUR-SUBDOMAIN.workers.dev}"
-ENV_FILE="examples/starter/.env"
+REPO_URL="https://github.com/meriial/coop-game.git"
+CLONE_DIR="coop-game"
 
 # 1. Get email (positional arg or interactive prompt)
 EMAIL="${1:-}"
@@ -31,25 +32,39 @@ else
 fi
 
 # 3. Poll until approved or expired
+TOKEN=""
 while true; do
   sleep 3
   POLL=$(curl -sf "$WORKER_URL/auth/poll?code=$DEVICE_CODE" || printf '{"status":"error"}')
   if printf '%s' "$POLL" | grep -q '"approved"'; then
     TOKEN=$(printf '%s' "$POLL" | grep -o '"agentToken":"[^"]*"' | sed 's/"agentToken":"//;s/"//')
-    printf '\nVITE_AGENT_TOKEN=%s\n' "$TOKEN" >> "$ENV_FILE"
-    echo "✅ Authenticated! Token written to $ENV_FILE"
+    echo ""
+    echo "✅ Authenticated!"
     break
   elif printf '%s' "$POLL" | grep -qE '"expired"|"error"'; then
     echo ""
-    echo "❌ Authentication expired or failed. Run ./setup.sh again." >&2
+    echo "❌ Authentication expired or failed. Run this script again." >&2
     exit 1
   else
     printf "."
   fi
 done
 
-# 4. Launch starter app (skipped when DRY_RUN=1, e.g. during automated tests)
+# 4. Clone repo + write token (skipped in DRY_RUN mode where we're already inside the repo)
+if [ "${DRY_RUN:-0}" != "1" ]; then
+  echo "Cloning workshop repo..."
+  git clone "$REPO_URL" "$CLONE_DIR"
+  cd "$CLONE_DIR"
+fi
+
+# Derive WebSocket game URL from WORKER_URL and write both vars to .env
+GAME_URL=$(printf '%s' "$WORKER_URL" | sed 's|^https://|wss://|;s|^http://|ws://|')/ws
+printf 'VITE_GAME_URL=%s\nVITE_AGENT_TOKEN=%s\n' "$GAME_URL" "$TOKEN" > examples/starter/.env
+echo "Token written to examples/starter/.env"
+
 if [ "${DRY_RUN:-0}" = "1" ]; then exit 0; fi
+
+# 5. Launch starter app
 cd examples/starter
 npm install
 npm start
