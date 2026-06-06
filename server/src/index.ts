@@ -1,11 +1,14 @@
 import { GameRoom } from './game-room';
+import { PresentationRoom } from './PresentationRoom';
 
 interface Env {
   GAME_ROOM: DurableObjectNamespace;
+  PRESENTATION_ROOM: DurableObjectNamespace;
   AUTH_KV: KVNamespace;
   RESEND_API_KEY?: string;
   FROM_EMAIL?: string;
   JWT_SECRET: string;
+  ADMIN_EMAIL: string;
 }
 
 const CORS = {
@@ -104,6 +107,26 @@ async function createJWT(payload: Record<string, unknown>, secret: string): Prom
   );
   const sig = await crypto.subtle.sign('HMAC', key, enc.encode(data));
   return `${data}.${bytesToB64url(new Uint8Array(sig))}`;
+}
+
+async function verifyJWT(token: string, secret: string): Promise<{ email: string; name: string }> {
+  const parts = token.split('.');
+  if (parts.length !== 3) throw new Error('Invalid JWT');
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['verify']
+  );
+  const data = `${parts[0]}.${parts[1]}`;
+  const sigBytes = Uint8Array.from(atob(parts[2].replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+  const valid = await crypto.subtle.verify('HMAC', key, sigBytes, enc.encode(data));
+  if (!valid) throw new Error('Invalid JWT signature');
+  const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'))) as { email?: string; name?: string; exp?: number };
+  if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) throw new Error('JWT expired');
+  return { email: payload.email ?? '', name: payload.name ?? 'Guest' };
 }
 
 // --- HTML Templates ---
@@ -270,6 +293,29 @@ export default {
       return env.GAME_ROOM.get(id).fetch(request);
     }
 
+    if (pathname.startsWith('/room/')) {
+      const roomId = pathname.slice(6) || 'main';
+      let role = 'participant';
+      let email = '';
+      let name = 'Guest';
+      const token = new URL(request.url).searchParams.get('token');
+      if (token) {
+        try {
+          const payload = await verifyJWT(token, env.JWT_SECRET);
+          email = payload.email;
+          name = payload.name;
+          role = email === env.ADMIN_EMAIL ? 'presenter' : 'participant';
+        } catch { /* bad token → participant */ }
+      }
+      const headers = new Headers(request.headers);
+      headers.set('X-User-Role', role);
+      headers.set('X-User-Email', email);
+      headers.set('X-User-Name', name);
+      const newReq = new Request(request, { headers });
+      const id = env.PRESENTATION_ROOM.idFromName(roomId);
+      return env.PRESENTATION_ROOM.get(id).fetch(newReq);
+    }
+
     if (pathname === '/auth/request' && method === 'POST') return handleAuthRequest(request, env);
     if (pathname === '/auth/poll' && method === 'GET') return handleAuthPoll(request, env);
     if (pathname === '/auth/verify' && method === 'GET') return handleAuthVerify(request, env);
@@ -282,4 +328,4 @@ export default {
   },
 } satisfies ExportedHandler<Env>;
 
-export { GameRoom };
+export { GameRoom, PresentationRoom };

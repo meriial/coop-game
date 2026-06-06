@@ -11,6 +11,14 @@ preview_id = "8b35467cdcfd434cacd62dde5fdfbf99"
 name = "GAME_ROOM"
 class_name = "GameRoom"
 
+[[durable_objects.bindings]]
+name = "PRESENTATION_ROOM"
+class_name = "PresentationRoom"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["GameRoom"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["PresentationRoom"]
