@@ -174,7 +174,11 @@ export class PresentationRoom {
     }
 
     else if (msg.type === 'GAME_JOIN') {
-      const existing = [...this.sql.exec(`SELECT color FROM players WHERE id = ?`, participantId)];
+      // Use email as stable player key so reconnects don't create duplicate entries
+      const playerKey = attachment.email || attachment.name;
+      // Clean up legacy UUID-keyed rows from before this fix
+      this.sql.exec(`DELETE FROM players WHERE length(id) = 36 AND id LIKE '________-____-____-____-____________'`);
+      const existing = [...this.sql.exec(`SELECT color FROM players WHERE id = ?`, playerKey)];
       let color: string;
       if (existing.length > 0) {
         color = existing[0].color as string;
@@ -185,7 +189,7 @@ export class PresentationRoom {
         this.sql.exec(`INSERT OR REPLACE INTO meta VALUES ('colorIndex', ?)`, String(idx + 1));
       }
       const displayName = msg.name.slice(0, 30);
-      this.sql.exec(`INSERT OR REPLACE INTO players VALUES (?, ?, ?)`, participantId, displayName, color);
+      this.sql.exec(`INSERT OR REPLACE INTO players VALUES (?, ?, ?)`, playerKey, displayName, color);
       this.broadcast({ type: 'SYNC_CANVAS', ...this.buildCanvasState() });
       this.broadcastConnectedUsers();
     }
@@ -193,12 +197,13 @@ export class PresentationRoom {
     else if (msg.type === 'GAME_PAINT') {
       const { x, y } = msg;
       if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE || !TARGET[y][x]) return;
-      const playerRow = [...this.sql.exec(`SELECT color FROM players WHERE id = ?`, participantId)];
+      const playerKey = attachment.email || attachment.name;
+      const playerRow = [...this.sql.exec(`SELECT color FROM players WHERE id = ?`, playerKey)];
       if (playerRow.length === 0) return;
       const color = playerRow[0].color as string;
       this.sql.exec(
         `INSERT OR REPLACE INTO canvas_cells VALUES (?, ?, ?, ?)`,
-        x, y, color, participantId
+        x, y, color, playerKey
       );
       this.broadcast({ type: 'SYNC_CANVAS', ...this.buildCanvasState() });
     }
@@ -257,12 +262,19 @@ export class PresentationRoom {
   }
 
   private getConnectedUsers(): ConnectedUser[] {
-    return this.ctx.getWebSockets().map(ws => {
+    const seen = new Set<string>();
+    const users: ConnectedUser[] = [];
+    for (const ws of this.ctx.getWebSockets()) {
       const att = ws.deserializeAttachment() as Attachment;
-      const playerRow = [...this.sql.exec(`SELECT color FROM players WHERE id = ?`, att.participantId)];
+      const key = att.email || att.name;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const playerKey = att.email || att.name;
+      const playerRow = [...this.sql.exec(`SELECT color FROM players WHERE id = ?`, playerKey)];
       const color = playerRow.length > 0 ? (playerRow[0].color as string) : undefined;
-      return { name: att.name, color };
-    });
+      users.push({ name: att.name, color });
+    }
+    return users;
   }
 
   private broadcastConnectedUsers(): void {

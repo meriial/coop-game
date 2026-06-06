@@ -82,7 +82,7 @@ export function PresenterApp({ state, send, myName, token }: Props) {
       </div>
 
       {/* Presenter control bar */}
-      <div className="flex items-center justify-between px-6 py-3 bg-slate-900 border-t border-slate-700/60 shrink-0">
+      <div className="relative z-[100] flex items-center justify-between px-6 py-3 bg-slate-900 border-t border-slate-700/60 shrink-0">
         <div className="flex items-center gap-2">
           <span className="text-indigo-400 text-xs font-semibold uppercase tracking-widest">Presenter</span>
           <span className="text-slate-500 text-xs">·</span>
