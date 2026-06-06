@@ -1,0 +1,10 @@
+{
+  "name": "workshop-game",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev:server": "pnpm --filter server dev",
+    "dev:starter": "pnpm --filter starter dev",
+    "deploy": "pnpm --filter server deploy"
+  }
+}
