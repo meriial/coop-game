@@ -4,6 +4,7 @@ export interface WsState {
   stepIndex: number;
   role: 'presenter' | 'participant';
   pollResults: Record<string, Record<string, number>>;
+  pollResetSeq: Record<string, number>;
   canvas: (string | null)[][];
   progress: number;
   players: Record<string, { id: string; name: string; color: string }>;
@@ -16,6 +17,7 @@ const DEFAULT_STATE: WsState = {
   stepIndex: 0,
   role: 'participant',
   pollResults: {},
+  pollResetSeq: {},
   canvas: EMPTY_CANVAS,
   progress: 0,
   players: {},
@@ -66,6 +68,14 @@ export function useWebSocket(url: string) {
                 ...prev.pollResults,
                 [pollId]: msg.results as Record<string, number>,
               },
+            };
+          }
+          case 'POLL_RESET': {
+            const pollId = msg.pollId as string;
+            return {
+              ...prev,
+              pollResults: { ...prev.pollResults, [pollId]: {} },
+              pollResetSeq: { ...prev.pollResetSeq, [pollId]: ((prev.pollResetSeq?.[pollId] ?? 0) as number) + 1 },
             };
           }
           case 'SYNC_CANVAS':

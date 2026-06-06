@@ -25,6 +25,9 @@ export function StageRenderer({ wsState, send, isPresenter, myName }: Props) {
   const onVote = (pollId: string, choice: string) =>
     send({ type: 'SUBMIT_VOTE', pollId, choice });
 
+  const onResetPoll = (pollId: string) =>
+    send({ type: 'RESET_POLL', pollId });
+
   return (
     <div className="w-full h-full relative">
       <SlideRenderer index={step.slideIndex} />
@@ -33,7 +36,9 @@ export function StageRenderer({ wsState, send, isPresenter, myName }: Props) {
         drawerContent={step.drawerOpen ? step.drawerContent : undefined}
         pollId={step.drawerOpen ? step.pollId : undefined}
         pollResults={wsState.pollResults}
+        pollResetSeq={wsState.pollResetSeq}
         onVote={onVote}
+        onResetPoll={onResetPoll}
         isPresenter={isPresenter}
       />
     </div>

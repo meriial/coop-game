@@ -44,6 +44,7 @@ interface Attachment {
 type InboundMsg =
   | { type: 'STEP_CHANGE'; stepIndex: number }
   | { type: 'SUBMIT_VOTE'; pollId: string; choice: string }
+  | { type: 'RESET_POLL'; pollId: string }
   | { type: 'GAME_JOIN'; name: string }
   | { type: 'GAME_PAINT'; x: number; y: number }
   | { type: 'GAME_RESET' };
@@ -52,6 +53,7 @@ type OutboundMsg =
   | { type: 'WELCOME'; stepIndex: number; role: string; canvas: (string | null)[][]; progress: number; players: Record<string, { id: string; name: string; color: string }> }
   | { type: 'SYNC_STEP'; stepIndex: number }
   | { type: 'POLL_UPDATES'; pollId: string; results: Record<string, number> }
+  | { type: 'POLL_RESET'; pollId: string }
   | { type: 'SYNC_CANVAS'; canvas: (string | null)[][]; progress: number; players: Record<string, { id: string; name: string; color: string }> };
 
 export class PresentationRoom {
@@ -65,6 +67,10 @@ export class PresentationRoom {
         CREATE TABLE IF NOT EXISTS votes (
           poll_id TEXT NOT NULL, choice TEXT NOT NULL, count INTEGER NOT NULL DEFAULT 0,
           PRIMARY KEY (poll_id, choice)
+        );
+        CREATE TABLE IF NOT EXISTS vote_records (
+          poll_id TEXT NOT NULL, participant_id TEXT NOT NULL, choice TEXT NOT NULL,
+          PRIMARY KEY (poll_id, participant_id)
         );
         CREATE TABLE IF NOT EXISTS canvas_cells (
           x INTEGER NOT NULL, y INTEGER NOT NULL, color TEXT NOT NULL, painted_by TEXT NOT NULL,
@@ -124,12 +130,43 @@ export class PresentationRoom {
     }
 
     else if (msg.type === 'SUBMIT_VOTE') {
-      this.sql.exec(
-        `INSERT INTO votes (poll_id, choice, count) VALUES (?, ?, 1)
-         ON CONFLICT(poll_id, choice) DO UPDATE SET count = count + 1`,
-        msg.pollId, msg.choice
-      );
-      this.broadcast({ type: 'POLL_UPDATES', pollId: msg.pollId, results: this.getPollResults(msg.pollId) });
+      const { pollId, choice } = msg;
+      const existing = [...this.sql.exec(
+        `SELECT choice FROM vote_records WHERE poll_id = ? AND participant_id = ?`,
+        pollId, participantId
+      )];
+      const previousChoice = existing.length > 0 ? existing[0].choice as string : null;
+
+      if (previousChoice === choice) {
+        // Same choice clicked → un-vote
+        this.sql.exec(`DELETE FROM vote_records WHERE poll_id = ? AND participant_id = ?`, pollId, participantId);
+        this.sql.exec(`UPDATE votes SET count = MAX(0, count - 1) WHERE poll_id = ? AND choice = ?`, pollId, choice);
+      } else {
+        if (previousChoice !== null) {
+          // Different choice → decrement old
+          this.sql.exec(`UPDATE votes SET count = MAX(0, count - 1) WHERE poll_id = ? AND choice = ?`, pollId, previousChoice);
+        }
+        // Increment new
+        this.sql.exec(
+          `INSERT INTO votes (poll_id, choice, count) VALUES (?, ?, 1)
+           ON CONFLICT(poll_id, choice) DO UPDATE SET count = count + 1`,
+          pollId, choice
+        );
+        this.sql.exec(
+          `INSERT INTO vote_records (poll_id, participant_id, choice) VALUES (?, ?, ?)
+           ON CONFLICT(poll_id, participant_id) DO UPDATE SET choice = excluded.choice`,
+          pollId, participantId, choice
+        );
+      }
+      this.broadcast({ type: 'POLL_UPDATES', pollId, results: this.getPollResults(pollId) });
+    }
+
+    else if (msg.type === 'RESET_POLL') {
+      if (role !== 'presenter') return;
+      const { pollId } = msg;
+      this.sql.exec(`DELETE FROM votes WHERE poll_id = ?`, pollId);
+      this.sql.exec(`DELETE FROM vote_records WHERE poll_id = ?`, pollId);
+      this.broadcast({ type: 'POLL_RESET', pollId });
     }
 
     else if (msg.type === 'GAME_JOIN') {
