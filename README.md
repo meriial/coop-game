@@ -4,7 +4,7 @@ An interactive presentation platform and cooperative real-time game for AI works
 
 ---
 
-## Setup (everyone)
+## Setup (DrugBank / twosmiles.ca participants)
 
 Run this single command in your terminal — it handles everything:
 
@@ -16,9 +16,17 @@ You'll be prompted for your `@drugbank.com` or `@twosmiles.ca` email. A magic li
 
 **What you see depends on who you are:**
 - **Participants** — slides sync in real-time, vote in polls, paint the pixel heart
-- **Organizer** (`music@twosmiles.ca`) — same view, plus a presenter control bar to advance slides, trigger polls, and reset the canvas
+- **Organizer** (`music@twosmiles.ca`) — same view, plus a presenter control bar to advance slides, trigger polls, reset the canvas, and invite guests
 
 **Requirements:** Node.js 18+, git, curl &nbsp;·&nbsp; pnpm is installed automatically if missing
+
+---
+
+## Joining as a guest (external participants)
+
+Guests with non-DrugBank emails don't need the terminal setup. The organizer sends them a personal invite link from the presenter control bar — clicking it opens the presentation directly in their browser, no setup required.
+
+The invite link is a signed JWT valid for 7 days.
 
 ---
 
@@ -109,7 +117,7 @@ pnpm exec wrangler deploy
 
 ```bash
 # server/.dev.vars is already set up with a local JWT_SECRET and ADMIN_EMAIL.
-# No RESEND_API_KEY → magic links are stored locally instead of emailed.
+# No RESEND_API_KEY → magic links and invite emails are stored in KV instead of sent.
 
 cd server && pnpm dev        # worker on http://localhost:8787
 ```
@@ -121,6 +129,8 @@ WORKER_URL=http://localhost:8787 bash <(curl -fsSL https://raw.githubusercontent
 ```
 
 This authenticates you, writes your token to `frontend/.env`, and opens `http://localhost:5174` as the presenter. Open a second browser window at `http://localhost:5174` (in a private/incognito window with no token) to see the participant view.
+
+**Testing guest invites locally:** Click "+ Invite" in the presenter control bar, enter any name and email, and click Send. Because there's no `RESEND_API_KEY`, the invite link is returned directly in the modal — copy it and open it in a new incognito tab to join as that guest. To inspect the email that would have been sent: `curl http://localhost:8787/auth/inbox`
 
 ### Reset the canvas between rounds
 
