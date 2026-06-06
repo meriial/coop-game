@@ -8,39 +8,15 @@ Each player is auto-assigned a unique color. Paint any unpainted target cell to 
 
 ## For participants
 
-### Option A — Dev container (recommended for yolo mode)
+Run this single command in your terminal — it handles everything:
 
-Keeps Cursor's AI terminal commands safely inside Docker — nothing can touch your host machine.
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/meriial/coop-game/main/setup.sh)
+```
 
-1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) and [Cursor](https://cursor.com) (or VS Code with the Dev Containers extension)
-2. Clone this repo and open it in Cursor
-3. When prompted, click **Reopen in Container** (or run `Dev Containers: Reopen in Container` from the command palette)
-4. Wait for the container to build and `pnpm install` to finish
-5. Create your env file:
-   ```
-   cp examples/starter/.env.example examples/starter/.env
-   # Edit .env and replace the placeholder URL with the one your organizer shared
-   ```
-6. Start the dev server:
-   ```bash
-   pnpm dev:starter
-   ```
-7. Open http://localhost:5173, enter your name, and start painting!
+You'll be prompted for your `@drugbank.com` or `@twosmiles.ca` email address. A magic link will arrive in your inbox — click it to authenticate, and your browser will open the game automatically.
 
-### Option B — Local (no Docker)
-
-1. Install [Node.js 20+](https://nodejs.org) and [pnpm](https://pnpm.io)
-2. Clone and install:
-   ```bash
-   git clone <repo-url>
-   cd workshop-game
-   pnpm install
-   ```
-3. Create `examples/starter/.env`:
-   ```
-   VITE_GAME_URL=wss://<url-from-organizer>
-   ```
-4. `pnpm dev:starter` → open http://localhost:5173
+**Requirements:** Node.js 18+, git, curl &nbsp;·&nbsp; pnpm is installed automatically if missing
 
 ---
 
@@ -105,45 +81,49 @@ These are good Cursor / AI-assisted tasks once you understand the SDK:
 
 ## For the organizer
 
-### Deploy the server (one-time)
+### First-time setup
 
 ```bash
-# 1. Authenticate with Cloudflare (opens browser)
-wrangler login
+# 1. Authenticate with Cloudflare
+cd server && pnpm exec wrangler login
 
-# 2. Deploy from the repo root
-pnpm deploy
+# 2. Create the KV namespace for auth tokens
+pnpm exec wrangler kv namespace create AUTH_KV
+pnpm exec wrangler kv namespace create AUTH_KV --preview
+# Copy the two IDs printed into server/wrangler.toml
 
-# 3. Note the URL printed by wrangler, e.g.:
-#    https://workshop-game.your-subdomain.workers.dev
-#
-# 4. The WebSocket endpoint is:
-#    wss://workshop-game.your-subdomain.workers.dev/ws
-#
-# 5. Share that wss:// URL with participants
+# 3. Set secrets
+pnpm exec wrangler secret put RESEND_API_KEY   # your Resend API key
+pnpm exec wrangler secret put FROM_EMAIL       # e.g. info@yourdomain.com
+pnpm exec wrangler secret put JWT_SECRET       # run: openssl rand -hex 32
+
+# 4. Update the default WORKER_URL in setup.sh to match your worker subdomain
+
+# 5. Deploy
+pnpm exec wrangler deploy
+```
+
+### Local development
+
+```bash
+# Create server/.dev.vars with:
+#   JWT_SECRET=any-local-value
+# (RESEND_API_KEY absent → fake inbox mode, magic links logged to /auth/inbox)
+
+cd server && pnpm dev        # worker on http://localhost:8787
+WORKER_URL=http://localhost:8787 bash <(curl -fsSL https://raw.githubusercontent.com/meriial/coop-game/main/setup.sh)
+# Check http://localhost:8787/auth/inbox for the magic link
 ```
 
 ### Reset the canvas between rounds
 
-The canvas persists in Durable Object storage. To reset for a new round:
-
 ```bash
-# Delete and re-create the DO storage (this resets the canvas)
-wrangler durable-objects namespace list
-# Then redeploy — the DO will reinitialize with an empty canvas on first request
-pnpm deploy
+# Redeploy — the Durable Object reinitialises with an empty canvas on first request
+cd server && pnpm exec wrangler deploy
 ```
 
-Or for a quick in-place reset without redeploying, you can add a `POST /reset` endpoint (see `server/src/game-room.ts`).
+Or add a `POST /reset` endpoint to `server/src/game-room.ts` for in-place resets.
 
 ### Customise the target image
 
-Edit the `TARGET` constant in `server/src/game-room.ts`. It's a 20×20 boolean grid — `true` means a cell needs to be painted, `false` means it should stay empty. Redeploy after changing it.
-
-### Local development (test the server without deploying)
-
-```bash
-pnpm dev:server   # starts wrangler dev on http://localhost:8787
-```
-
-Then point participants at `ws://localhost:8787/ws` for local testing.
+Edit the `TARGET` constant in `server/src/game-room.ts`. It's a 20×20 boolean grid — `true` means a cell needs to be painted. Redeploy after changing it.
