@@ -7,13 +7,53 @@ interface Props {
   state: WsState;
   send: (msg: Record<string, unknown> & { type: string }) => void;
   myName: string;
+  token: string | null;
 }
 
-export function PresenterApp({ state, send, myName }: Props) {
+export function PresenterApp({ state, send, myName, token }: Props) {
   const step = presentationSteps[state.stepIndex] ?? presentationSteps[0];
   const isGame = step.type === 'game';
   const total = presentationSteps.length;
   const [usersOpen, setUsersOpen] = useState(false);
+  const [inviteOpen, setInviteOpen]     = useState(false);
+  const [inviteEmail, setInviteEmail]   = useState('');
+  const [inviteName, setInviteName]     = useState('');
+  const [inviteStatus, setInviteStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [inviteError, setInviteError]   = useState('');
+  const [inviteLink, setInviteLink]     = useState('');
+
+  const SERVER_URL = (import.meta.env.VITE_SERVER_URL as string | undefined) ?? 'http://localhost:8787';
+
+  const closeInviteModal = () => {
+    setInviteOpen(false);
+    setInviteEmail(''); setInviteName('');
+    setInviteStatus('idle'); setInviteError(''); setInviteLink('');
+  };
+
+  const handleInvite = async () => {
+    if (!inviteEmail.trim() || !inviteName.trim()) return;
+    setInviteStatus('loading'); setInviteError(''); setInviteLink('');
+    try {
+      const res = await fetch(`${SERVER_URL}/auth/guest-invite`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token ?? ''}` },
+        body: JSON.stringify({ email: inviteEmail.trim(), name: inviteName.trim() }),
+      });
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string };
+        setInviteStatus('error');
+        setInviteError(data.error ?? `Server error ${res.status}`);
+        return;
+      }
+      const data = (await res.json()) as { link?: string };
+      const rawToken = data.link ? new URL(data.link).searchParams.get('token') ?? '' : '';
+      setInviteLink(rawToken ? `${window.location.origin}/?token=${rawToken}` : '');
+      setInviteStatus('success');
+    } catch {
+      setInviteStatus('error');
+      setInviteError('Network error — is the server running?');
+    }
+  };
 
   const goTo = (idx: number) => {
     const clamped = Math.max(0, Math.min(total - 1, idx));
@@ -53,6 +93,12 @@ export function PresenterApp({ state, send, myName }: Props) {
           >
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
             {state.connectedUsers.length} connected
+          </button>
+          <button
+            onClick={() => setInviteOpen(true)}
+            className="ml-1 flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 px-2.5 py-1 rounded-full text-xs text-slate-300 transition-colors"
+          >
+            + Invite
           </button>
         </div>
 
@@ -112,6 +158,101 @@ export function PresenterApp({ state, send, myName }: Props) {
           )}
         </div>
       </div>
+
+      {/* Invite guest modal */}
+      {inviteOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center"
+          onClick={closeInviteModal}
+        >
+          <div
+            className="bg-slate-900 border border-slate-700/60 rounded-2xl shadow-2xl w-full max-w-sm p-6 flex flex-col gap-4 mx-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="text-white font-semibold text-base">Invite Guest</h2>
+              <button
+                onClick={closeInviteModal}
+                className="text-slate-500 hover:text-slate-300 text-lg leading-none transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            {inviteStatus !== 'success' ? (
+              <>
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <label className="text-slate-400 text-xs mb-1 block">Guest name</label>
+                    <input
+                      type="text"
+                      placeholder="Jane Smith"
+                      value={inviteName}
+                      onChange={e => setInviteName(e.target.value)}
+                      disabled={inviteStatus === 'loading'}
+                      className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-200 text-sm placeholder-slate-500 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 text-xs mb-1 block">Guest email</label>
+                    <input
+                      type="email"
+                      placeholder="guest@example.com"
+                      value={inviteEmail}
+                      onChange={e => setInviteEmail(e.target.value)}
+                      disabled={inviteStatus === 'loading'}
+                      className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-200 text-sm placeholder-slate-500 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
+                    />
+                  </div>
+                </div>
+
+                {inviteStatus === 'error' && (
+                  <p className="text-red-400 text-xs">{inviteError}</p>
+                )}
+
+                <button
+                  onClick={handleInvite}
+                  disabled={inviteStatus === 'loading' || !inviteEmail.trim() || !inviteName.trim()}
+                  className="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {inviteStatus === 'loading' ? 'Sending…' : 'Send Invite'}
+                </button>
+              </>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <p className="text-emerald-400 text-sm font-medium">Invite sent to {inviteEmail}!</p>
+                {inviteLink ? (
+                  <>
+                    <p className="text-slate-400 text-xs">Dev mode — copy and share this link:</p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        readOnly
+                        value={inviteLink}
+                        className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-300 text-xs font-mono focus:outline-none"
+                        onClick={e => (e.target as HTMLInputElement).select()}
+                      />
+                      <button
+                        onClick={() => navigator.clipboard.writeText(inviteLink)}
+                        className="px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs transition-colors shrink-0"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-slate-400 text-xs">The guest will receive an email with a direct link to join.</p>
+                )}
+                <button
+                  onClick={closeInviteModal}
+                  className="mt-1 w-full py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

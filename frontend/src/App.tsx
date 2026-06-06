@@ -74,7 +74,7 @@ export function App() {
   }
 
   if (state.role === 'presenter') {
-    return <PresenterApp state={state} send={send} myName={myName} />;
+    return <PresenterApp state={state} send={send} myName={myName} token={token} />;
   }
   return <ParticipantApp state={state} send={send} myName={myName} />;
 }

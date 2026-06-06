@@ -277,6 +277,54 @@ async function handleAuthInbox(env: Env): Promise<Response> {
   return Response.json(emails.filter(Boolean), { headers: CORS });
 }
 
+async function handleGuestInvite(request: Request, env: Env): Promise<Response> {
+  const auth = request.headers.get('Authorization') ?? '';
+  const bearer = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  let callerEmail: string;
+  try {
+    ({ email: callerEmail } = await verifyJWT(bearer, env.JWT_SECRET));
+  } catch {
+    return Response.json({ error: 'Unauthorized' }, { status: 401, headers: CORS });
+  }
+  if (callerEmail !== env.ADMIN_EMAIL) {
+    return Response.json({ error: 'Forbidden' }, { status: 403, headers: CORS });
+  }
+
+  let body: { email?: string; name?: string };
+  try { body = (await request.json()) as { email?: string; name?: string }; }
+  catch { return Response.json({ error: 'Invalid JSON' }, { status: 400, headers: CORS }); }
+  const guestEmail = (body.email ?? '').trim();
+  const guestName  = (body.name  ?? '').trim();
+  if (!guestEmail || !guestName)
+    return Response.json({ error: 'email and name are required' }, { status: 400, headers: CORS });
+
+  const now = Math.floor(Date.now() / 1000);
+  const guestToken = await createJWT(
+    { email: guestEmail, name: guestName, iat: now, exp: now + 604800 },
+    env.JWT_SECRET
+  );
+
+  const inviteLink = `${new URL(request.url).origin}/?token=${guestToken}`;
+
+  try {
+    await makeAdapter(env).send({
+      to: guestEmail,
+      subject: "You're invited to the DrugBank AI Workshop",
+      html: `<p>Hi ${guestName},</p>
+<p>You've been invited to join the workshop. Click the link below — no setup required:</p>
+<p><a href="${inviteLink}" style="font-size:1.2em">Join the Workshop →</a></p>
+<p style="color:#666;font-size:0.85em">This link is personal to you and valid for 7 days.</p>`,
+      link: inviteLink,
+    });
+  } catch {
+    return Response.json({ error: 'Failed to send email' }, { status: 500, headers: CORS });
+  }
+
+  const responseBody: Record<string, string> = {};
+  if (!env.RESEND_API_KEY) responseBody.link = inviteLink;
+  return Response.json(responseBody, { status: 200, headers: CORS });
+}
+
 // --- Main Handler ---
 
 export default {
@@ -323,6 +371,7 @@ export default {
     if (pathname === '/auth/poll' && method === 'GET') return handleAuthPoll(request, env);
     if (pathname === '/auth/verify' && method === 'GET') return handleAuthVerify(request, env);
     if (pathname === '/auth/inbox' && method === 'GET') return handleAuthInbox(env);
+    if (pathname === '/auth/guest-invite' && method === 'POST') return handleGuestInvite(request, env);
 
     return new Response(
       JSON.stringify({ status: 'ok', game: 'Workshop Pixel Art', ws: '/ws' }),
