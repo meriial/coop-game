@@ -64,7 +64,11 @@ echo "Token written to examples/starter/.env"
 
 if [ "${DRY_RUN:-0}" = "1" ]; then exit 0; fi
 
-# 5. Launch starter app
+# 5. Install deps (requires pnpm — install it if missing) + launch starter app
+if ! command -v pnpm > /dev/null 2>&1; then
+  echo "Installing pnpm..."
+  npm install -g pnpm
+fi
+pnpm install
 cd examples/starter
-npm install
-npm start
+pnpm dev
