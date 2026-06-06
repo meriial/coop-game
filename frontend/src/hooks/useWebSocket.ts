@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 
+export interface ConnectedUser { name: string; color?: string }
+
 export interface WsState {
   stepIndex: number;
   role: 'presenter' | 'participant';
@@ -8,6 +10,7 @@ export interface WsState {
   canvas: (string | null)[][];
   progress: number;
   players: Record<string, { id: string; name: string; color: string }>;
+  connectedUsers: ConnectedUser[];
   connected: boolean;
 }
 
@@ -21,6 +24,7 @@ const DEFAULT_STATE: WsState = {
   canvas: EMPTY_CANVAS,
   progress: 0,
   players: {},
+  connectedUsers: [],
   connected: false,
 };
 
@@ -85,6 +89,8 @@ export function useWebSocket(url: string, disabled = false) {
               progress: (msg.progress as number) ?? prev.progress,
               players: (msg.players as WsState['players']) ?? prev.players,
             };
+          case 'CONNECTED_USERS':
+            return { ...prev, connectedUsers: (msg.users as ConnectedUser[]) ?? [] };
           default:
             return prev;
         }

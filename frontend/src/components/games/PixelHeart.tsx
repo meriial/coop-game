@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect } from 'react';
 import type { WsState } from '../../hooks/useWebSocket';
 
 const GRID_SIZE = 20;
@@ -34,27 +34,17 @@ interface Props {
 }
 
 export function PixelHeart({ wsState, send, isHost, myName }: Props) {
-  const [nameInput, setNameInput] = useState(myName);
-  const [joined, setJoined] = useState(false);
-
-  const handleJoin = () => {
-    const name = nameInput.trim();
-    if (!name) return;
-    send({ type: 'GAME_JOIN', name });
-    setJoined(true);
-  };
+  useEffect(() => {
+    send({ type: 'GAME_JOIN', name: myName });
+  }, [send, myName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handlePaint = (x: number, y: number) => {
-    if (!joined && !isHost) return;
     send({ type: 'GAME_PAINT', x, y });
   };
 
   const handleReset = () => send({ type: 'GAME_RESET' });
 
   const players = Object.values(wsState.players);
-
-  // Auto-join as presenter
-  const isReady = isHost || joined;
 
   return (
     <div className="flex flex-col items-center gap-5 w-full max-w-2xl mx-auto px-4 py-6">
@@ -85,27 +75,6 @@ export function PixelHeart({ wsState, send, isHost, myName }: Props) {
         </div>
       </div>
 
-      {/* Join form (participants only, before joining) */}
-      {!isHost && !joined && (
-        <div className="flex gap-2 w-full max-w-xs">
-          <input
-            type="text"
-            value={nameInput}
-            onChange={e => setNameInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') handleJoin(); }}
-            placeholder="Your name"
-            maxLength={30}
-            className="flex-1 bg-slate-800 border border-slate-600 text-white px-3 py-2 rounded-lg text-sm focus:outline-none focus:border-indigo-500"
-          />
-          <button
-            onClick={handleJoin}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-          >
-            Join
-          </button>
-        </div>
-      )}
-
       {/* Grid */}
       <div
         className="grid gap-px bg-slate-800 border border-slate-700 rounded p-px w-full aspect-square max-w-sm"
@@ -118,11 +87,11 @@ export function PixelHeart({ wsState, send, isHost, myName }: Props) {
             return (
               <div
                 key={`${x}-${y}`}
-                onClick={() => isReady && isTarget && handlePaint(x, y)}
+                onClick={() => isTarget && handlePaint(x, y)}
                 style={{ background: color ?? (isTarget ? '#1e293b' : '#0f172a') }}
                 className={[
                   'aspect-square transition-all duration-100',
-                  isTarget && isReady ? 'cursor-pointer hover:brightness-125' : '',
+                  isTarget ? 'cursor-pointer hover:brightness-125' : '',
                 ].join(' ')}
               />
             );

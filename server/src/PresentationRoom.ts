@@ -49,12 +49,15 @@ type InboundMsg =
   | { type: 'GAME_PAINT'; x: number; y: number }
   | { type: 'GAME_RESET' };
 
+type ConnectedUser = { name: string; color?: string };
+
 type OutboundMsg =
   | { type: 'WELCOME'; stepIndex: number; role: string; canvas: (string | null)[][]; progress: number; players: Record<string, { id: string; name: string; color: string }> }
   | { type: 'SYNC_STEP'; stepIndex: number }
   | { type: 'POLL_UPDATES'; pollId: string; results: Record<string, number> }
   | { type: 'POLL_RESET'; pollId: string }
-  | { type: 'SYNC_CANVAS'; canvas: (string | null)[][]; progress: number; players: Record<string, { id: string; name: string; color: string }> };
+  | { type: 'SYNC_CANVAS'; canvas: (string | null)[][]; progress: number; players: Record<string, { id: string; name: string; color: string }> }
+  | { type: 'CONNECTED_USERS'; users: ConnectedUser[] };
 
 export class PresentationRoom {
   private sql: SqlStorage;
@@ -108,6 +111,7 @@ export class PresentationRoom {
       ...canvasState,
     } satisfies OutboundMsg));
 
+    this.broadcastConnectedUsers();
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -206,7 +210,7 @@ export class PresentationRoom {
   }
 
   webSocketClose(_ws: WebSocket): void {
-    // Players remain in DB for persistence across reconnects
+    this.broadcastConnectedUsers();
   }
 
   webSocketError(_ws: WebSocket, _error: unknown): void {
@@ -249,6 +253,19 @@ export class PresentationRoom {
       progress: TARGET_CELL_COUNT > 0 ? Math.round((filledCount / TARGET_CELL_COUNT) * 100) : 0,
       players,
     };
+  }
+
+  private getConnectedUsers(): ConnectedUser[] {
+    return this.ctx.getWebSockets().map(ws => {
+      const att = ws.deserializeAttachment() as Attachment;
+      const playerRow = [...this.sql.exec(`SELECT color FROM players WHERE id = ?`, att.participantId)];
+      const color = playerRow.length > 0 ? (playerRow[0].color as string) : undefined;
+      return { name: att.name, color };
+    });
+  }
+
+  private broadcastConnectedUsers(): void {
+    this.broadcast({ type: 'CONNECTED_USERS', users: this.getConnectedUsers() });
   }
 
   private broadcast(msg: OutboundMsg): void {
