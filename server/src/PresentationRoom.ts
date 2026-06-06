@@ -187,6 +187,7 @@ export class PresentationRoom {
       const displayName = msg.name.slice(0, 30);
       this.sql.exec(`INSERT OR REPLACE INTO players VALUES (?, ?, ?)`, participantId, displayName, color);
       this.broadcast({ type: 'SYNC_CANVAS', ...this.buildCanvasState() });
+      this.broadcastConnectedUsers();
     }
 
     else if (msg.type === 'GAME_PAINT') {

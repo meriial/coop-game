@@ -98,6 +98,7 @@ export function useWebSocket(url: string, disabled = false) {
     };
 
     ws.onclose = () => {
+      if (wsRef.current !== ws) return; // cleanup already ran — don't reconnect
       wsRef.current = null;
       setState(prev => ({ ...prev, connected: false }));
       retryRef.current = setTimeout(() => {
