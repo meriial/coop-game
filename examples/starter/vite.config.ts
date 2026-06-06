@@ -11,6 +11,5 @@ export default defineConfig({
     // Bind on all interfaces so Dev Containers port forwarding reaches the host browser.
     host: true,
     port: 5173,
-    strictPort: true,
   },
 });
