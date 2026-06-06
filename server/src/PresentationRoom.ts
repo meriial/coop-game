@@ -215,12 +215,12 @@ export class PresentationRoom {
     }
   }
 
-  webSocketClose(_ws: WebSocket): void {
-    this.broadcastConnectedUsers();
+  webSocketClose(ws: WebSocket): void {
+    this.broadcastConnectedUsers(ws);
   }
 
-  webSocketError(_ws: WebSocket, _error: unknown): void {
-    // Hibernation handles cleanup
+  webSocketError(ws: WebSocket, _error: unknown): void {
+    this.broadcastConnectedUsers(ws);
   }
 
   private getStepIndex(): number {
@@ -261,24 +261,29 @@ export class PresentationRoom {
     };
   }
 
-  private getConnectedUsers(): ConnectedUser[] {
+  private getConnectedUsers(exclude?: WebSocket): ConnectedUser[] {
     const seen = new Set<string>();
     const users: ConnectedUser[] = [];
     for (const ws of this.ctx.getWebSockets()) {
+      if (ws === exclude) continue;
       const att = ws.deserializeAttachment() as Attachment;
       const key = att.email || att.name;
       if (seen.has(key)) continue;
       seen.add(key);
-      const playerKey = att.email || att.name;
-      const playerRow = [...this.sql.exec(`SELECT color FROM players WHERE id = ?`, playerKey)];
+      const playerRow = [...this.sql.exec(`SELECT color FROM players WHERE id = ?`, key)];
       const color = playerRow.length > 0 ? (playerRow[0].color as string) : undefined;
       users.push({ name: att.name, color });
     }
     return users;
   }
 
-  private broadcastConnectedUsers(): void {
-    this.broadcast({ type: 'CONNECTED_USERS', users: this.getConnectedUsers() });
+  private broadcastConnectedUsers(exclude?: WebSocket): void {
+    const users = this.getConnectedUsers(exclude);
+    const text = JSON.stringify({ type: 'CONNECTED_USERS', users } satisfies OutboundMsg);
+    for (const ws of this.ctx.getWebSockets()) {
+      if (ws === exclude) continue;
+      try { ws.send(text); } catch { /* ignore closed sockets */ }
+    }
   }
 
   private broadcast(msg: OutboundMsg): void {
