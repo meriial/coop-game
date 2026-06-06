@@ -3,7 +3,8 @@ import { useWebSocket } from './hooks/useWebSocket';
 import { PresenterApp } from './PresenterApp';
 import { ParticipantApp } from './ParticipantApp';
 
-const WS_BASE = (import.meta.env.VITE_WS_URL as string | undefined) ?? 'ws://localhost:8787';
+const WS_BASE = (import.meta.env.VITE_WS_URL as string | undefined) ??
+  `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`;
 const TOKEN_KEY = 'presenter_token';
 
 function decodeJwtName(token: string): string {

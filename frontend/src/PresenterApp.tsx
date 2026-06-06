@@ -22,7 +22,7 @@ export function PresenterApp({ state, send, myName, token }: Props) {
   const [inviteError, setInviteError]   = useState('');
   const [inviteLink, setInviteLink]     = useState('');
 
-  const SERVER_URL = (import.meta.env.VITE_SERVER_URL as string | undefined) ?? 'http://localhost:8787';
+  const SERVER_URL = (import.meta.env.VITE_SERVER_URL as string | undefined) ?? window.location.origin;
 
   const closeInviteModal = () => {
     setInviteOpen(false);
