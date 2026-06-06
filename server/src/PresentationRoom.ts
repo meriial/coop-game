@@ -261,6 +261,12 @@ export class PresentationRoom {
     };
   }
 
+  private colorForKey(key: string): string {
+    let hash = 0;
+    for (let i = 0; i < key.length; i++) hash = (Math.imul(hash, 31) + key.charCodeAt(i)) >>> 0;
+    return PLAYER_COLORS[hash % PLAYER_COLORS.length];
+  }
+
   private getConnectedUsers(exclude?: WebSocket): ConnectedUser[] {
     const seen = new Set<string>();
     const users: ConnectedUser[] = [];
@@ -271,7 +277,7 @@ export class PresentationRoom {
       if (seen.has(key)) continue;
       seen.add(key);
       const playerRow = [...this.sql.exec(`SELECT color FROM players WHERE id = ?`, key)];
-      const color = playerRow.length > 0 ? (playerRow[0].color as string) : undefined;
+      const color = playerRow.length > 0 ? (playerRow[0].color as string) : this.colorForKey(key);
       users.push({ name: att.name, color });
     }
     return users;
