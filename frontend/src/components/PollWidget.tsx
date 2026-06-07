@@ -328,7 +328,7 @@ export function Slider2DResults({ values, labels }: { values: string[]; labels: 
 
   return (
     <div className="flex flex-col gap-2 items-center">
-      <svg viewBox={`-60 -40 ${TRI_W + 120} ${TRI_H + 80}`} className="w-full max-w-xs" style={{ overflow: 'visible' }}>
+      <svg viewBox={`-100 -80 ${TRI_W + 200} ${TRI_H + 160}`} className="w-full max-w-xs" style={{ overflow: 'visible' }}>
         <polygon
           points={V.map(v => v.join(',')).join(' ')}
           fill="rgba(99,102,241,0.08)"
@@ -338,12 +338,12 @@ export function Slider2DResults({ values, labels }: { values: string[]; labels: 
         {/* Vertex labels */}
         {labels.map((label, i) => {
           const [vx, vy] = V[i];
-          const offsets: [number, number][] = [[0, -18], [-20, 18], [20, 18]];
+          const offsets: [number, number][] = [[0, -30], [-30, 36], [30, 36]];
           return (
-            <text key={i} x={vx + offsets[i][0]} y={vy + offsets[i][1]} textAnchor="middle" fill="#94a3b8" fontSize="18" fontWeight="600">
+            <text key={i} x={vx + offsets[i][0]} y={vy + offsets[i][1]} textAnchor="middle" fill="#94a3b8" fontSize="36" fontWeight="600">
               {label}
               {meanBary && (
-                <tspan fill="#6366f1" fontSize="13" dy="0"> {Math.round(meanBary[i] * 100)}%</tspan>
+                <tspan fill="#6366f1" fontSize="26" dy="0"> {Math.round(meanBary[i] * 100)}%</tspan>
               )}
             </text>
           );
@@ -414,12 +414,12 @@ function Slider2DWidget({ pollId, poll, pollValues, pollResetSeq, onVote, onRese
       {showResults ? (
         <Slider2DResults values={pollValues} labels={poll.labels} />
       ) : (
-        <div className="flex flex-col gap-3 items-center">
+        <div className="flex flex-col gap-3 items-center select-none">
           <svg
             ref={svgRef}
-            viewBox={`-60 -40 ${TRI_W + 120} ${TRI_H + 80}`}
+            viewBox={`-100 -80 ${TRI_W + 200} ${TRI_H + 160}`}
             className={['w-full max-w-xs', isPresenter ? 'opacity-50' : 'cursor-crosshair'].join(' ')}
-            style={{ overflow: 'visible', touchAction: 'none' }}
+            style={{ overflow: 'visible', touchAction: 'none', userSelect: 'none' }}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
@@ -438,12 +438,12 @@ function Slider2DWidget({ pollId, poll, pollValues, pollResetSeq, onVote, onRese
             {/* Vertex labels */}
             {poll.labels.map((label, i) => {
               const [vx, vy] = V[i];
-              const offsets: [number, number][] = [[0, -18], [-20, 18], [20, 18]];
+              const offsets: [number, number][] = [[0, -30], [-30, 36], [30, 36]];
               const weights = [bx, by, bz];
               return (
-                <text key={i} x={vx + offsets[i][0]} y={vy + offsets[i][1]} textAnchor="middle" fill="#94a3b8" fontSize="18" fontWeight="600">
+                <text key={i} x={vx + offsets[i][0]} y={vy + offsets[i][1]} textAnchor="middle" fill="#94a3b8" fontSize="36" fontWeight="600">
                   {label}
-                  <tspan fill="#6366f1" fontSize="13" dy="0"> {Math.round(weights[i] * 100)}%</tspan>
+                  <tspan fill="#6366f1" fontSize="26" dy="0"> {Math.round(weights[i] * 100)}%</tspan>
                 </text>
               );
             })}
