@@ -132,7 +132,7 @@ export function Stack({
 
 export function H1({ children }: { children: React.ReactNode }) {
   return (
-    <h1 className="text-6xl md:text-7xl font-bold text-white leading-tight tracking-tight">
+    <h1 className="text-[7.5rem] md:text-[9rem] font-bold text-white leading-tight tracking-tight">
       {children}
     </h1>
   );
@@ -140,7 +140,7 @@ export function H1({ children }: { children: React.ReactNode }) {
 
 export function H2({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="text-5xl md:text-6xl font-bold text-white leading-tight">
+    <h2 className="text-[6rem] md:text-[7.5rem] font-bold text-white leading-tight">
       {children}
     </h2>
   );
@@ -209,58 +209,73 @@ export function TagRow({ children }: { children: React.ReactNode }) {
 
 // ── List layouts ────────────────────────────────────────────────────────────
 
-export interface BulletItem {
+const ListIndexCtx = createContext(0);
+
+function withListIndex(children: React.ReactNode) {
+  return React.Children.toArray(children).map((child, i) => (
+    <ListIndexCtx.Provider key={i} value={i}>
+      {child}
+    </ListIndexCtx.Provider>
+  ));
+}
+
+export function BulletList({ children }: { children: React.ReactNode }) {
+  return <ul className="flex flex-col gap-4">{withListIndex(children)}</ul>;
+}
+
+export function BulletListItem({
+  icon: Icon,
+  label,
+  sub,
+}: {
   icon: LucideIcon;
   label: string;
   sub: string;
-}
-
-export function BulletList({ items }: { items: BulletItem[] }) {
+}) {
+  const i = useContext(ListIndexCtx);
   const accent = useContext(AccentCtx);
   const a = ac[accent];
   return (
-    <ul className="flex flex-col gap-4">
-      {items.map(({ icon: Icon, label, sub }, i) => (
-        <li
-          key={label}
-          className={`anim-in flex items-center gap-4 bg-slate-800/40 rounded-xl px-5 py-4 border border-slate-700/40 border-l-[3px] ${a.borderAccent}`}
-          style={{ animationDelay: `${i * 0.1}s` }}
-        >
-          <span className="w-8 shrink-0 flex items-center justify-center">
-            <Icon size={24} className={a.text} strokeWidth={1.75} />
-          </span>
-          <div>
-            <span className="text-white text-xl font-semibold">{label}</span>
-            <span className="text-slate-400 text-lg"> — {sub}</span>
-          </div>
-        </li>
-      ))}
-    </ul>
+    <li
+      className={`anim-in flex items-center gap-4 bg-slate-800/40 rounded-xl px-5 py-4 border border-slate-700/40 border-l-[3px] ${a.borderAccent}`}
+      style={{ animationDelay: `${i * 0.1}s` }}
+    >
+      <span className="w-8 shrink-0 flex items-center justify-center">
+        <Icon size={24} className={a.text} strokeWidth={1.75} />
+      </span>
+      <div>
+        <span className="text-white text-xl font-semibold">{label}</span>
+        <span className="text-slate-400 text-lg"> — {sub}</span>
+      </div>
+    </li>
   );
 }
 
-export interface GridItem {
-  icon: LucideIcon;
-  label: string;
+export function IconGrid({ children }: { children: React.ReactNode }) {
+  return (
+    <ul className="grid grid-cols-2 gap-4">{withListIndex(children)}</ul>
+  );
 }
 
-export function IconGrid({ items }: { items: GridItem[] }) {
+export function IconGridItem({
+  icon: Icon,
+  label,
+}: {
+  icon: LucideIcon;
+  label: string;
+}) {
+  const i = useContext(ListIndexCtx);
   const accent = useContext(AccentCtx);
   const a = ac[accent];
   return (
-    <ul className="grid grid-cols-2 gap-4">
-      {items.map(({ icon: Icon, label }, i) => (
-        <li
-          key={label}
-          className="anim-in flex items-center gap-3 bg-slate-800/60 rounded-xl px-4 py-3 border border-slate-700/50"
-          style={{ animationDelay: `${i * 0.08}s` }}
-        >
-          <span className="w-6 shrink-0 flex items-center justify-center">
-            <Icon size={20} className={a.text} strokeWidth={1.75} />
-          </span>
-          <span className="text-white text-base font-medium">{label}</span>
-        </li>
-      ))}
-    </ul>
+    <li
+      className="anim-in flex items-center gap-3 bg-slate-800/60 rounded-xl px-4 py-3 border border-slate-700/50"
+      style={{ animationDelay: `${i * 0.08}s` }}
+    >
+      <span className="w-6 shrink-0 flex items-center justify-center">
+        <Icon size={20} className={a.text} strokeWidth={1.75} />
+      </span>
+      <span className="text-white text-base font-medium">{label}</span>
+    </li>
   );
 }

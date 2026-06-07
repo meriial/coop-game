@@ -66,7 +66,7 @@ interface Attachment {
 
 type InboundMsg =
   | { type: 'STEP_CHANGE'; stepIndex: number }
-  | { type: 'SUBMIT_VOTE'; pollId: string; choice: string }
+  | { type: 'SUBMIT_VOTE'; pollId: string; choice: string; pollType?: string }
   | { type: 'RESET_POLL'; pollId: string }
   | { type: 'GAME_JOIN'; name: string }
   | { type: 'GAME_PAINT'; x: number; y: number }
@@ -79,9 +79,9 @@ type InboundMsg =
 type ConnectedUser = { name: string; color?: string };
 
 type OutboundMsg =
-  | ({ type: 'WELCOME'; stepIndex: number; role: string; canvas: (string | null)[][]; progress: number; players: Record<string, { id: string; name: string; color: string }> } & MatchState)
+  | ({ type: 'WELCOME'; stepIndex: number; role: string; canvas: (string | null)[][]; progress: number; players: Record<string, { id: string; name: string; color: string }>; pollResults: Record<string, Record<string, number>>; pollValues: Record<string, string[]> } & MatchState)
   | { type: 'SYNC_STEP'; stepIndex: number }
-  | { type: 'POLL_UPDATES'; pollId: string; results: Record<string, number> }
+  | { type: 'POLL_UPDATES'; pollId: string; results?: Record<string, number>; values?: string[] }
   | { type: 'POLL_RESET'; pollId: string }
   | { type: 'SYNC_CANVAS'; canvas: (string | null)[][]; progress: number; players: Record<string, { id: string; name: string; color: string }> }
   | ({ type: 'SYNC_MATCH' } & MatchState)
@@ -101,6 +101,10 @@ export class PresentationRoom {
         );
         CREATE TABLE IF NOT EXISTS vote_records (
           poll_id TEXT NOT NULL, participant_id TEXT NOT NULL, choice TEXT NOT NULL,
+          PRIMARY KEY (poll_id, participant_id)
+        );
+        CREATE TABLE IF NOT EXISTS slider_records (
+          poll_id TEXT NOT NULL, participant_id TEXT NOT NULL, value TEXT NOT NULL,
           PRIMARY KEY (poll_id, participant_id)
         );
         CREATE TABLE IF NOT EXISTS canvas_cells (
@@ -155,6 +159,8 @@ export class PresentationRoom {
       role,
       ...canvasState,
       ...matchState,
+      pollResults: this.buildAllPollResults(),
+      pollValues: this.buildAllPollValues(),
     } satisfies OutboundMsg));
 
     this.broadcastConnectedUsers();
@@ -180,32 +186,42 @@ export class PresentationRoom {
     }
 
     else if (msg.type === 'SUBMIT_VOTE') {
-      const { pollId, choice } = msg;
-      const existing = [...this.sql.exec(
-        `SELECT choice FROM vote_records WHERE poll_id = ? AND participant_id = ?`,
-        pollId, participantId
-      )];
-      const previousChoice = existing.length > 0 ? existing[0].choice as string : null;
+      const { pollId, choice, pollType } = msg;
 
-      if (previousChoice === choice) {
-        this.sql.exec(`DELETE FROM vote_records WHERE poll_id = ? AND participant_id = ?`, pollId, participantId);
-        this.sql.exec(`UPDATE votes SET count = MAX(0, count - 1) WHERE poll_id = ? AND choice = ?`, pollId, choice);
-      } else {
-        if (previousChoice !== null) {
-          this.sql.exec(`UPDATE votes SET count = MAX(0, count - 1) WHERE poll_id = ? AND choice = ?`, pollId, previousChoice);
-        }
+      if (pollType === 'slider1d' || pollType === 'slider2d') {
         this.sql.exec(
-          `INSERT INTO votes (poll_id, choice, count) VALUES (?, ?, 1)
-           ON CONFLICT(poll_id, choice) DO UPDATE SET count = count + 1`,
-          pollId, choice
-        );
-        this.sql.exec(
-          `INSERT INTO vote_records (poll_id, participant_id, choice) VALUES (?, ?, ?)
-           ON CONFLICT(poll_id, participant_id) DO UPDATE SET choice = excluded.choice`,
+          `INSERT INTO slider_records (poll_id, participant_id, value) VALUES (?, ?, ?)
+           ON CONFLICT(poll_id, participant_id) DO UPDATE SET value = excluded.value`,
           pollId, participantId, choice
         );
+        this.broadcast({ type: 'POLL_UPDATES', pollId, values: this.getSliderValues(pollId) });
+      } else {
+        const existing = [...this.sql.exec(
+          `SELECT choice FROM vote_records WHERE poll_id = ? AND participant_id = ?`,
+          pollId, participantId
+        )];
+        const previousChoice = existing.length > 0 ? existing[0].choice as string : null;
+
+        if (previousChoice === choice) {
+          this.sql.exec(`DELETE FROM vote_records WHERE poll_id = ? AND participant_id = ?`, pollId, participantId);
+          this.sql.exec(`UPDATE votes SET count = MAX(0, count - 1) WHERE poll_id = ? AND choice = ?`, pollId, choice);
+        } else {
+          if (previousChoice !== null) {
+            this.sql.exec(`UPDATE votes SET count = MAX(0, count - 1) WHERE poll_id = ? AND choice = ?`, pollId, previousChoice);
+          }
+          this.sql.exec(
+            `INSERT INTO votes (poll_id, choice, count) VALUES (?, ?, 1)
+             ON CONFLICT(poll_id, choice) DO UPDATE SET count = count + 1`,
+            pollId, choice
+          );
+          this.sql.exec(
+            `INSERT INTO vote_records (poll_id, participant_id, choice) VALUES (?, ?, ?)
+             ON CONFLICT(poll_id, participant_id) DO UPDATE SET choice = excluded.choice`,
+            pollId, participantId, choice
+          );
+        }
+        this.broadcast({ type: 'POLL_UPDATES', pollId, results: this.getPollResults(pollId) });
       }
-      this.broadcast({ type: 'POLL_UPDATES', pollId, results: this.getPollResults(pollId) });
     }
 
     else if (msg.type === 'RESET_POLL') {
@@ -213,6 +229,7 @@ export class PresentationRoom {
       const { pollId } = msg;
       this.sql.exec(`DELETE FROM votes WHERE poll_id = ?`, pollId);
       this.sql.exec(`DELETE FROM vote_records WHERE poll_id = ?`, pollId);
+      this.sql.exec(`DELETE FROM slider_records WHERE poll_id = ?`, pollId);
       this.broadcast({ type: 'POLL_RESET', pollId });
     }
 
@@ -439,6 +456,25 @@ export class PresentationRoom {
     const results: Record<string, number> = {};
     for (const row of rows) results[row.choice as string] = row.count as number;
     return results;
+  }
+
+  private getSliderValues(pollId: string): string[] {
+    const rows = [...this.sql.exec(`SELECT value FROM slider_records WHERE poll_id = ?`, pollId)];
+    return rows.map(r => r.value as string);
+  }
+
+  private buildAllPollResults(): Record<string, Record<string, number>> {
+    const pollIds = [...this.sql.exec(`SELECT DISTINCT poll_id FROM votes`)].map(r => r.poll_id as string);
+    const out: Record<string, Record<string, number>> = {};
+    for (const pid of pollIds) out[pid] = this.getPollResults(pid);
+    return out;
+  }
+
+  private buildAllPollValues(): Record<string, string[]> {
+    const pollIds = [...this.sql.exec(`SELECT DISTINCT poll_id FROM slider_records`)].map(r => r.poll_id as string);
+    const out: Record<string, string[]> = {};
+    for (const pid of pollIds) out[pid] = this.getSliderValues(pid);
+    return out;
   }
 
   private buildCanvasState(): { canvas: (string | null)[][]; progress: number; players: Record<string, { id: string; name: string; color: string }> } {

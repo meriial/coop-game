@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "login": "DRY_RUN=1 bash setup.sh",
+    "login:dev": "WORKER_URL=http://localhost:8787 DRY_RUN=1 bash setup.sh",
     "dev:server": "pnpm --filter server dev",
     "dev:starter": "pnpm --filter starter dev",
     "dev:frontend": "pnpm --filter frontend dev",

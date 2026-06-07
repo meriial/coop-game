@@ -22,16 +22,16 @@ import {
   Tag,
   TagRow,
   BulletList,
+  BulletListItem,
   IconGrid,
-  type BulletItem,
-  type GridItem,
+  IconGridItem,
 } from "./slide-kit";
 
 interface Props {
   index: number;
 }
 
-const slides = [<Slide0 />, <Slide1 />, <Slide2 />];
+const slides = [<Slide0 />, <Slide1 />, <Slide2 />, <Slide3 />];
 
 export function SlideRenderer({ index }: Props) {
   return (
@@ -47,69 +47,77 @@ function Slide0() {
   return (
     <Slide bg="dot" accent="indigo">
       <Stack gap="lg" align="center">
-        <IconBadge icon={Heart} />
-        <H1>Building with AI</H1>
-        <Subtext>less wand, more wizard</Subtext>
+        <H1>
+          Less Wand
+          <br />
+          More Wizard
+        </H1>
         <TagRow>
-          <Tag>Cloudflare Workers</Tag>
-          <Tag accent="pink">Durable Objects</Tag>
-          <Tag accent="emerald">Real-time WebSockets</Tag>
+          <Tag>Collaboration</Tag>
+          <Tag accent="pink">Capability</Tag>
+          <Tag accent="emerald">Quality</Tag>
         </TagRow>
       </Stack>
     </Slide>
   );
 }
 
-const slide1Items: BulletItem[] = [
-  {
-    icon: Zap,
-    label: "Real-time WebSocket server",
-    sub: "on Cloudflare Workers",
-  },
-  {
-    icon: Database,
-    label: "Durable Objects",
-    sub: "for persistent shared game state",
-  },
-  {
-    icon: Package,
-    label: "Browser SDK",
-    sub: "TypeScript client anyone can drop in",
-  },
-  {
-    icon: Grid2x2,
-    label: "Cooperative pixel art game",
-    sub: "fill the heart together",
-  },
-];
-
 function Slide1() {
   return (
     <Slide bg="line" accent="indigo">
       <Content>
         <Header label="Today's Goal" heading="The Game Plan" />
-        <BulletList items={slide1Items} />
+        <BulletList>
+          <BulletListItem
+            icon={Zap}
+            label="Real-time WebSocket server"
+            sub="on Cloudflare Workers"
+          />
+          <BulletListItem
+            icon={Database}
+            label="Durable Objects"
+            sub="for persistent shared game state"
+          />
+          <BulletListItem
+            icon={Package}
+            label="Browser SDK"
+            sub="TypeScript client anyone can drop in"
+          />
+          <BulletListItem
+            icon={Grid2x2}
+            label="Cooperative pixel art game"
+            sub="fill the heart together"
+          />
+        </BulletList>
       </Content>
     </Slide>
   );
 }
-
-const slide2Items: GridItem[] = [
-  { icon: Sparkles, label: "Confetti on victory" },
-  { icon: Bot, label: "Auto-bot that fills cells" },
-  { icon: Volume2, label: "Sound effects on paint" },
-  { icon: Pipette, label: "Custom color picker" },
-  { icon: BarChart2, label: "Personal score counter" },
-  { icon: ImageIcon, label: "New target image" },
-];
 
 function Slide2() {
   return (
     <Slide bg="pixel" accent="emerald">
       <Content>
         <Header label="What's Next" heading="Keep Building" />
-        <IconGrid items={slide2Items} />
+        <IconGrid>
+          <IconGridItem icon={Sparkles} label="Confetti on victory" />
+          <IconGridItem icon={Bot} label="Auto-bot that fills cells" />
+          <IconGridItem icon={Volume2} label="Sound effects on paint" />
+          <IconGridItem icon={Pipette} label="Custom color picker" />
+          <IconGridItem icon={BarChart2} label="Personal score counter" />
+          <IconGridItem icon={ImageIcon} label="New target image" />
+        </IconGrid>
       </Content>
+    </Slide>
+  );
+}
+
+function Slide3() {
+  return (
+    <Slide bg="line" accent="indigo">
+      <Stack gap="lg" align="center">
+        <H1>Quick Poll</H1>
+      </Stack>
     </Slide>
   );
 }

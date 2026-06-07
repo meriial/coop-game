@@ -8,6 +8,7 @@ export interface WsState {
   stepIndex: number;
   role: 'presenter' | 'participant';
   pollResults: Record<string, Record<string, number>>;
+  pollValues: Record<string, string[]>;
   pollResetSeq: Record<string, number>;
   canvas: (string | null)[][];
   progress: number;
@@ -30,6 +31,7 @@ const DEFAULT_STATE: WsState = {
   stepIndex: 0,
   role: 'participant',
   pollResults: {},
+  pollValues: {},
   pollResetSeq: {},
   canvas: EMPTY_CANVAS,
   progress: 0,
@@ -76,6 +78,8 @@ export function useWebSocket(url: string, disabled = false) {
               connected: true,
               stepIndex: (msg.stepIndex as number) ?? 0,
               role: (msg.role as 'presenter' | 'participant') ?? 'participant',
+              pollResults: (msg.pollResults as Record<string, Record<string, number>>) ?? {},
+              pollValues: (msg.pollValues as Record<string, string[]>) ?? {},
               canvas: (msg.canvas as (string | null)[][]) ?? EMPTY_CANVAS,
               progress: (msg.progress as number) ?? 0,
               players: (msg.players as WsState['players']) ?? {},
@@ -92,12 +96,15 @@ export function useWebSocket(url: string, disabled = false) {
             return { ...prev, stepIndex: msg.stepIndex as number };
           case 'POLL_UPDATES': {
             const pollId = msg.pollId as string;
+            if (msg.values !== undefined) {
+              return {
+                ...prev,
+                pollValues: { ...prev.pollValues, [pollId]: msg.values as string[] },
+              };
+            }
             return {
               ...prev,
-              pollResults: {
-                ...prev.pollResults,
-                [pollId]: msg.results as Record<string, number>,
-              },
+              pollResults: { ...prev.pollResults, [pollId]: msg.results as Record<string, number> },
             };
           }
           case 'POLL_RESET': {
@@ -105,6 +112,7 @@ export function useWebSocket(url: string, disabled = false) {
             return {
               ...prev,
               pollResults: { ...prev.pollResults, [pollId]: {} },
+              pollValues: { ...prev.pollValues, [pollId]: [] },
               pollResetSeq: { ...prev.pollResetSeq, [pollId]: ((prev.pollResetSeq?.[pollId] ?? 0) as number) + 1 },
             };
           }

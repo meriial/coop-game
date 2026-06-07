@@ -358,6 +358,13 @@ export default {
       } catch {
         return new Response('Unauthorized', { status: 401, headers: CORS });
       }
+      // Dev-only: localhost connections may override role for testing
+      const reqUrl = new URL(request.url);
+      const isLocalhost = reqUrl.hostname === 'localhost' || reqUrl.hostname === '127.0.0.1';
+      if (isLocalhost) {
+        const devRole = reqUrl.searchParams.get('devRole');
+        if (devRole === 'presenter' || devRole === 'participant') role = devRole;
+      }
       const headers = new Headers(request.headers);
       headers.set('X-User-Role', role);
       headers.set('X-User-Email', email);

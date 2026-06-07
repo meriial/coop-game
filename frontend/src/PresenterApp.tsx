@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Volume2, VolumeX } from 'lucide-react';
+import { Volume2, VolumeX, Presentation, User } from 'lucide-react';
 import { presentationSteps, stepHasSound } from './config/presentationConfig';
 import type { WsState } from './hooks/useWebSocket';
 import { StageRenderer } from './components/StageRenderer';
@@ -10,9 +10,10 @@ interface Props {
   send: (msg: Record<string, unknown> & { type: string }) => void;
   myName: string;
   token: string | null;
+  onToggleDevRole?: () => void;
 }
 
-export function PresenterApp({ state, send, myName, token }: Props) {
+export function PresenterApp({ state, send, myName, token, onToggleDevRole }: Props) {
   const step = presentationSteps[state.stepIndex] ?? presentationSteps[0];
   const isGame = step.type === 'game';
   const { muted, toggleMute } = useSoundContext();
@@ -87,6 +88,15 @@ export function PresenterApp({ state, send, myName, token }: Props) {
               title={muted ? 'Unmute sounds' : 'Mute sounds'}
             >
               {muted ? <VolumeX size={13} /> : <Volume2 size={13} />}
+            </button>
+          )}
+          {onToggleDevRole && (
+            <button
+              onClick={onToggleDevRole}
+              className="flex items-center justify-center w-7 h-7 rounded-full bg-slate-900/80 backdrop-blur-sm border border-amber-500/50 text-amber-400 hover:text-amber-300 hover:border-amber-400 transition-colors"
+              title="DEV: Switch to participant view"
+            >
+              <User size={13} />
             </button>
           )}
           <div className="bg-slate-900/80 backdrop-blur-sm border border-slate-700/60 px-3 py-1.5 rounded-full text-xs text-slate-300 pointer-events-none">

@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useWebSocket } from './hooks/useWebSocket';
 import { PresenterApp } from './PresenterApp';
 import { ParticipantApp } from './ParticipantApp';
@@ -49,11 +49,23 @@ function NotAuthenticated() {
   );
 }
 
+const IS_DEV = import.meta.env.DEV;
+
 export function App() {
   const token = useMemo(() => getToken(), []);
-  const wsUrl = `${WS_BASE}/room/main?token=${encodeURIComponent(token ?? '')}`;
+  const [devRoleOverride, setDevRoleOverride] = useState<'presenter' | 'participant' | null>(null);
+
+  const wsUrl = useMemo(() => {
+    const base = `${WS_BASE}/room/main?token=${encodeURIComponent(token ?? '')}`;
+    return IS_DEV && devRoleOverride ? `${base}&devRole=${devRoleOverride}` : base;
+  }, [token, devRoleOverride]);
+
   const { state, send } = useWebSocket(wsUrl, !token);
   const myName = token ? decodeJwtName(token) : 'Guest';
+
+  const toggleDevRole = IS_DEV
+    ? () => setDevRoleOverride(prev => (prev ?? state.role) === 'presenter' ? 'participant' : 'presenter')
+    : undefined;
 
   useEffect(() => {
     document.title = state.role === 'presenter' ? '🎤 Presenter — DrugBank Workshop' : 'DrugBank AI Workshop';
@@ -75,7 +87,7 @@ export function App() {
   }
 
   if (state.role === 'presenter') {
-    return <PresenterApp state={state} send={send} myName={myName} token={token} />;
+    return <PresenterApp state={state} send={send} myName={myName} token={token} onToggleDevRole={toggleDevRole} />;
   }
-  return <ParticipantApp state={state} send={send} myName={myName} />;
+  return <ParticipantApp state={state} send={send} myName={myName} onToggleDevRole={toggleDevRole} />;
 }
