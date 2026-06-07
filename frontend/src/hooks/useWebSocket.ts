@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 
 export interface ConnectedUser { name: string; color?: string }
 
+export interface MatchScore { id: string; name: string; color: string; count: number }
+
 export interface WsState {
   stepIndex: number;
   role: 'presenter' | 'participant';
@@ -12,6 +14,12 @@ export interface WsState {
   players: Record<string, { id: string; name: string; color: string }>;
   connectedUsers: ConnectedUser[];
   connected: boolean;
+  matchBoard: string[];
+  matchClaimed: (string | null)[];
+  matchPending: Record<string, string>;
+  matchPaused: boolean;
+  matchScores: MatchScore[];
+  matchGameOver: boolean;
 }
 
 const EMPTY_CANVAS: (string | null)[][] = Array.from({ length: 20 }, () => Array<string | null>(20).fill(null));
@@ -26,6 +34,12 @@ const DEFAULT_STATE: WsState = {
   players: {},
   connectedUsers: [],
   connected: false,
+  matchBoard: [],
+  matchClaimed: [],
+  matchPending: {},
+  matchPaused: false,
+  matchScores: [],
+  matchGameOver: false,
 };
 
 type OutgoingMsg = Record<string, unknown> & { type: string };
@@ -61,6 +75,12 @@ export function useWebSocket(url: string, disabled = false) {
               canvas: (msg.canvas as (string | null)[][]) ?? EMPTY_CANVAS,
               progress: (msg.progress as number) ?? 0,
               players: (msg.players as WsState['players']) ?? {},
+              matchBoard: (msg.matchBoard as string[]) ?? [],
+              matchClaimed: (msg.matchClaimed as (string | null)[]) ?? [],
+              matchPending: (msg.matchPending as Record<string, string>) ?? {},
+              matchPaused: (msg.matchPaused as boolean) ?? false,
+              matchScores: (msg.matchScores as MatchScore[]) ?? [],
+              matchGameOver: (msg.gameOver as boolean) ?? false,
             };
           case 'SYNC_STEP':
             return { ...prev, stepIndex: msg.stepIndex as number };
@@ -88,6 +108,16 @@ export function useWebSocket(url: string, disabled = false) {
               canvas: (msg.canvas as (string | null)[][]) ?? prev.canvas,
               progress: (msg.progress as number) ?? prev.progress,
               players: (msg.players as WsState['players']) ?? prev.players,
+            };
+          case 'SYNC_MATCH':
+            return {
+              ...prev,
+              matchBoard: (msg.matchBoard as string[]) ?? prev.matchBoard,
+              matchClaimed: (msg.matchClaimed as (string | null)[]) ?? prev.matchClaimed,
+              matchPending: (msg.matchPending as Record<string, string>) ?? prev.matchPending,
+              matchPaused: (msg.matchPaused as boolean) ?? prev.matchPaused,
+              matchScores: (msg.matchScores as MatchScore[]) ?? prev.matchScores,
+              matchGameOver: (msg.gameOver as boolean) ?? prev.matchGameOver,
             };
           case 'CONNECTED_USERS':
             return { ...prev, connectedUsers: (msg.users as ConnectedUser[]) ?? [] };

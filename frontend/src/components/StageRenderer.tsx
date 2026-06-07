@@ -3,6 +3,7 @@ import type { WsState } from '../hooks/useWebSocket';
 import { SlideRenderer } from './SlideRenderer';
 import { Drawer } from './Drawer';
 import { PixelHeart } from './games/PixelHeart';
+import { PeriodicMatch } from './games/PeriodicMatch';
 
 interface Props {
   wsState: WsState;
@@ -15,6 +16,13 @@ export function StageRenderer({ wsState, send, isPresenter, myName }: Props) {
   const step = presentationSteps[wsState.stepIndex] ?? presentationSteps[0];
 
   if (step.type === 'game') {
+    if (step.gameId === 'periodic-match') {
+      return (
+        <div className="w-full h-full overflow-hidden">
+          <PeriodicMatch wsState={wsState} send={send} isHost={isPresenter} myName={myName} />
+        </div>
+      );
+    }
     return (
       <div className="w-full h-full flex items-center justify-center overflow-y-auto">
         <PixelHeart wsState={wsState} send={send} isHost={isPresenter} myName={myName} />
