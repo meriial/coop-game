@@ -1,6 +1,9 @@
 import { useEffect, useCallback } from 'react';
 import type { WsState } from '../../hooks/useWebSocket';
 
+const MIN_ELEMENTS = 5;
+const MAX_ELEMENTS = 118;
+
 interface Props {
   wsState: WsState;
   send: (msg: Record<string, unknown> & { type: string }) => void;
@@ -9,7 +12,7 @@ interface Props {
 }
 
 export function PeriodicMatch({ wsState, send, isHost, myName }: Props) {
-  const { matchBoard, matchClaimed, matchPending, matchPaused, matchScores, matchGameOver } = wsState;
+  const { matchBoard, matchClaimed, matchPending, matchPaused, matchScores, matchGameOver, matchElementCount } = wsState;
 
   useEffect(() => {
     send({ type: 'GAME_JOIN', name: myName });
@@ -21,6 +24,10 @@ export function PeriodicMatch({ wsState, send, isHost, myName }: Props) {
 
   const handlePause = useCallback(() => send({ type: 'MATCH_PAUSE' }), [send]);
   const handleReset = useCallback(() => send({ type: 'MATCH_RESET' }), [send]);
+
+  const setSize = useCallback((n: number) => {
+    send({ type: 'MATCH_SET_SIZE', count: Math.min(Math.max(MIN_ELEMENTS, n), MAX_ELEMENTS) });
+  }, [send]);
 
   const totalPairs = matchBoard.length / 2;
   const claimedPairs = matchClaimed.filter(c => c !== null).length / 2;
@@ -58,7 +65,7 @@ export function PeriodicMatch({ wsState, send, isHost, myName }: Props) {
           className="flex-1 overflow-hidden"
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(50px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(54px, 1fr))',
             gap: '3px',
             alignContent: 'start',
           }}
@@ -86,7 +93,7 @@ export function PeriodicMatch({ wsState, send, isHost, myName }: Props) {
       </div>
 
       {/* Leaderboard sidebar */}
-      <div className="w-48 shrink-0 flex flex-col gap-3 p-3 border-l border-slate-800 bg-slate-900/50">
+      <div className="w-52 shrink-0 flex flex-col gap-3 p-3 border-l border-slate-800 bg-slate-900/50">
         <h3 className="text-slate-300 font-semibold text-xs uppercase tracking-wider shrink-0">
           Leaderboard
         </h3>
@@ -112,7 +119,32 @@ export function PeriodicMatch({ wsState, send, isHost, myName }: Props) {
         </div>
 
         {isHost && (
-          <div className="flex flex-col gap-2 shrink-0 pt-2 border-t border-slate-700/60">
+          <div className="flex flex-col gap-2.5 shrink-0 pt-2 border-t border-slate-700/60">
+            {/* Element count stepper */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-slate-500 text-xs">Elements</span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setSize(matchElementCount - 1)}
+                  disabled={matchElementCount <= MIN_ELEMENTS}
+                  className="w-7 h-7 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-30 disabled:cursor-not-allowed text-slate-200 text-base font-bold transition-colors flex items-center justify-center leading-none"
+                >
+                  −
+                </button>
+                <span className="flex-1 text-center text-white text-sm font-mono font-bold tabular-nums">
+                  {matchElementCount}
+                </span>
+                <button
+                  onClick={() => setSize(matchElementCount + 1)}
+                  disabled={matchElementCount >= MAX_ELEMENTS}
+                  className="w-7 h-7 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-30 disabled:cursor-not-allowed text-slate-200 text-base font-bold transition-colors flex items-center justify-center leading-none"
+                >
+                  +
+                </button>
+              </div>
+              <p className="text-slate-600 text-xs leading-tight">applies on reshuffle</p>
+            </div>
+
             <button
               onClick={handlePause}
               className={[
@@ -197,7 +229,7 @@ function Tile({ symbol, claimedColor, pendingColor, isClickable, dimmed, onClick
     bg = '#f8fafc';
     textColor = '#0f172a';
     border = `2px solid ${pendingColor}`;
-    boxShadow = `0 0 6px ${pendingColor}60`;
+    boxShadow = `0 0 8px ${pendingColor}70`;
   } else {
     bg = '#1e293b';
     textColor = 'transparent';
@@ -210,9 +242,8 @@ function Tile({ symbol, claimedColor, pendingColor, isClickable, dimmed, onClick
       onClick={onClick}
       disabled={!isClickable}
       className={[
-        'aspect-square rounded flex items-center justify-center text-xs font-bold transition-all duration-75 select-none',
+        'aspect-square rounded flex items-center justify-center text-sm font-bold transition-all duration-75 select-none',
         isClickable ? 'hover:brightness-125 cursor-pointer active:scale-95' : 'cursor-default',
-        dimmed ? 'opacity-40' : '',
       ].join(' ')}
       style={{ backgroundColor: bg, color: textColor, border, boxShadow, opacity: dimmed ? 0.4 : 1 }}
       title={revealed ? symbol : undefined}

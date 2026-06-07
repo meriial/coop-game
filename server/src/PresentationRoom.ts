@@ -52,6 +52,7 @@ interface MatchState {
   matchPending: Record<string, string>;
   matchPaused: boolean;
   matchScores: { id: string; name: string; color: string; count: number }[];
+  matchElementCount: number;
   gameOver: boolean;
 }
 
@@ -71,7 +72,8 @@ type InboundMsg =
   | { type: 'GAME_RESET' }
   | { type: 'MATCH_FLIP'; pos: number }
   | { type: 'MATCH_PAUSE' }
-  | { type: 'MATCH_RESET' };
+  | { type: 'MATCH_RESET' }
+  | { type: 'MATCH_SET_SIZE'; count: number };
 
 type ConnectedUser = { name: string; color?: string };
 
@@ -307,6 +309,13 @@ export class PresentationRoom {
       this.initMatchBoard();
       this.broadcast({ type: 'SYNC_MATCH', ...this.buildMatchState() });
     }
+
+    else if (msg.type === 'MATCH_SET_SIZE') {
+      if (role !== 'presenter') return;
+      const count = Math.min(Math.max(5, Math.floor(msg.count)), ELEMENTS.length);
+      this.sql.exec(`INSERT OR REPLACE INTO meta VALUES ('match_element_count', ?)`, String(count));
+      this.broadcast({ type: 'SYNC_MATCH', ...this.buildMatchState() });
+    }
   }
 
   webSocketClose(ws: WebSocket): void {
@@ -321,7 +330,12 @@ export class PresentationRoom {
   }
 
   private initMatchBoard(): void {
-    const deck = [...ELEMENTS, ...ELEMENTS];
+    const countRow = [...this.sql.exec(`SELECT value FROM meta WHERE key = 'match_element_count'`)];
+    const count = countRow.length > 0
+      ? Math.min(Math.max(5, parseInt(countRow[0].value as string, 10)), ELEMENTS.length)
+      : ELEMENTS.length;
+    const elements = ELEMENTS.slice(0, count);
+    const deck = [...elements, ...elements];
     for (let i = deck.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [deck[i], deck[j]] = [deck[j], deck[i]];
@@ -356,6 +370,11 @@ export class PresentationRoom {
     const pausedRow = [...this.sql.exec(`SELECT value FROM meta WHERE key = 'match_paused'`)];
     const matchPaused = pausedRow.length > 0 && pausedRow[0].value === 'true';
 
+    const countRow = [...this.sql.exec(`SELECT value FROM meta WHERE key = 'match_element_count'`)];
+    const matchElementCount = countRow.length > 0
+      ? Math.min(Math.max(5, parseInt(countRow[0].value as string, 10)), ELEMENTS.length)
+      : ELEMENTS.length;
+
     const scoreRows = [...this.sql.exec(`
       SELECT p.id, p.name, p.color, COUNT(mc.pos) as cnt
       FROM players p
@@ -370,7 +389,7 @@ export class PresentationRoom {
       count: Math.floor((r.cnt as number) / 2),
     }));
 
-    return { matchBoard, matchClaimed, matchPending, matchPaused, matchScores, gameOver: claimedCount === ELEMENTS.length * 2 };
+    return { matchBoard, matchClaimed, matchPending, matchPaused, matchScores, matchElementCount, gameOver: claimedCount === matchBoard.length };
   }
 
   private getStepIndex(): number {

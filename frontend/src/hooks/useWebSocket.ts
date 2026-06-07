@@ -20,6 +20,7 @@ export interface WsState {
   matchPaused: boolean;
   matchScores: MatchScore[];
   matchGameOver: boolean;
+  matchElementCount: number;
 }
 
 const EMPTY_CANVAS: (string | null)[][] = Array.from({ length: 20 }, () => Array<string | null>(20).fill(null));
@@ -40,6 +41,7 @@ const DEFAULT_STATE: WsState = {
   matchPaused: false,
   matchScores: [],
   matchGameOver: false,
+  matchElementCount: 118,
 };
 
 type OutgoingMsg = Record<string, unknown> & { type: string };
@@ -81,6 +83,7 @@ export function useWebSocket(url: string, disabled = false) {
               matchPaused: (msg.matchPaused as boolean) ?? false,
               matchScores: (msg.matchScores as MatchScore[]) ?? [],
               matchGameOver: (msg.gameOver as boolean) ?? false,
+              matchElementCount: (msg.matchElementCount as number) ?? 118,
             };
           case 'SYNC_STEP':
             return { ...prev, stepIndex: msg.stepIndex as number };
@@ -118,6 +121,7 @@ export function useWebSocket(url: string, disabled = false) {
               matchPaused: (msg.matchPaused as boolean) ?? prev.matchPaused,
               matchScores: (msg.matchScores as MatchScore[]) ?? prev.matchScores,
               matchGameOver: (msg.gameOver as boolean) ?? prev.matchGameOver,
+              matchElementCount: (msg.matchElementCount as number) ?? prev.matchElementCount,
             };
           case 'CONNECTED_USERS':
             return { ...prev, connectedUsers: (msg.users as ConnectedUser[]) ?? [] };
