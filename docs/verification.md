@@ -14,7 +14,7 @@ Local secrets live in [`server/.dev.vars`](../server/.dev.vars) (gitignored). Co
 
 ```bash
 cp server/.dev.vars.example server/.dev.vars
-# edit ADMIN_EMAIL, JWT_SECRET, and ALLOWED_EMAIL_DOMAINS
+# edit ADMIN_EMAIL, JWT_SECRET, ALLOWED_EMAIL_DOMAINS, and REPO_URL
 ```
 
 | Variable | Where | Purpose |
@@ -26,7 +26,25 @@ cp server/.dev.vars.example server/.dev.vars
 
 Magic-link auth only accepts emails on `ALLOWED_EMAIL_DOMAINS`. If unset, `/auth/request` returns 500 (fail fast) — set it in `.dev.vars` / `wrangler secret`. Vitest uses `admin@test.com` with a test secret (tests mint JWTs directly) — not the magic-link flow.
 
-**Public config endpoint:** `GET /auth/config` returns `{ "allowed_email_domains": ["..."], "repo_url": "https://..." }` (no secrets). [`setup.sh`](../setup.sh) requires a worker URL as the first argument (`setup.sh <worker-url> [email]`), fetches `/auth/config` to validate the email domain and resolve the clone URL — no local `ALLOWED_EMAIL_DOMAINS` or `REPO_URL` export needed.
+**Public config endpoint:** `GET /auth/config` returns participant-facing settings (no JWT secrets):
+
+```json
+{
+  "allowed_email_domains": ["your-domain.example"],
+  "repo_url": "https://github.com/your-org/your-workshop-repo.git"
+}
+```
+
+Returns **500** if `ALLOWED_EMAIL_DOMAINS` or `REPO_URL` is unset on the worker.
+
+**Participant setup:** [`setup.sh`](../setup.sh) takes the worker URL as its first argument:
+
+```bash
+setup.sh <worker-url> [email]
+# Or: WORKER_URL=<url> setup.sh [email]
+```
+
+It fetches `/auth/config`, validates the email domain, runs the magic-link flow, clones `repo_url`, and starts the frontend. Participants do not need local `ALLOWED_EMAIL_DOMAINS` or `REPO_URL`.
 
 Production:
 
@@ -99,11 +117,11 @@ cd ../packages/mcp-server && npm install && npm test
 **Expected:**
 
 ```
-Test Files  5 passed (5)
-Tests       21 passed (21)
+Test Files  6 passed (6)
+Tests       25 passed (25)
 ```
 
-Covers: `WELCOME`, periodic-match flips/alarms, pixel-heart paint, polls, `CONNECTED_USERS`, agent auth caps.
+Covers: `WELCOME`, periodic-match flips/alarms, pixel-heart paint, polls, `CONNECTED_USERS`, agent auth caps, `GET /auth/config` and domain enforcement on `/auth/request`.
 
 From repo root (runs both suites):
 
@@ -315,7 +333,40 @@ npm run deploy   # from repo root — builds frontend, deploys server
 
 ---
 
-## 9. Auth end-to-end script
+## 9. Participant setup script (`setup.sh`)
+
+Mirrors what participants run against a deployed worker. From the repo (with worker running locally):
+
+```bash
+./setup.sh http://localhost:8787 you@your-allowed-domain.example
+```
+
+**Flow:**
+
+1. `GET /auth/config` — domain list + `repo_url`
+2. Domain check (fails fast before magic link if email not allowed)
+3. `POST /auth/request` → open magic link (or read from `/auth/inbox` locally)
+4. `GET /auth/poll` → JWT
+5. `git clone` from `repo_url`, write `frontend/.env`, `pnpm install`, start frontend
+
+**Blocked domain (expect exit 1):**
+
+```bash
+./setup.sh http://localhost:8787 user@blocked.com
+# Error: email domain not permitted (allowed: …)
+```
+
+**Dry run (auth only, no clone/install):**
+
+```bash
+DRY_RUN=1 ./setup.sh http://localhost:8787 you@your-allowed-domain.example
+```
+
+From repo root: `npm run login:dev` runs the dry-run flow against `http://localhost:8787`.
+
+---
+
+## 10. Auth end-to-end script
 
 [`test-local.sh`](../test-local.sh) clones the repo to a temp directory, runs the full magic-link + inbox + JWT pipeline, and prints the decoded payload. Useful for CI-style auth verification:
 
@@ -339,7 +390,8 @@ npm run deploy   # from repo root — builds frontend, deploys server
 | Frontend only | `cd frontend && npm run dev` |
 | Health check | `curl http://localhost:8787/` |
 | Local auth inbox | `curl http://localhost:8787/auth/inbox \| jq` |
-| Allowed email domains | `curl http://localhost:8787/auth/config \| jq` |
+| Auth config (domains + repo) | `curl http://localhost:8787/auth/config \| jq` |
+| Participant setup | `./setup.sh http://localhost:8787 you@your-allowed-domain.example` |
 | Presenter UI | `http://localhost:5174/?token=<jwt>` |
 | MCP server | `WORKSHOP_OWNER_TOKEN=<jwt> node packages/mcp-server/dist/index.js` |
 
@@ -354,3 +406,6 @@ npm run deploy   # from repo root — builds frontend, deploys server
 | Magic link missing | Check terminal output from `dev.sh`, or `curl localhost:8787/auth/inbox` |
 | Wrong slide on connect (not step 0) | The `main` room persists state — use `node scripts/verify-presentation-e2e.mjs` (fresh room), or presenter resets step |
 | `admin@test.com` magic-link auth fails | Domain not in `ALLOWED_EMAIL_DOMAINS` — use an allowed domain or mint JWTs in tests |
+| `/auth/config` returns 500 | Set `ALLOWED_EMAIL_DOMAINS` and `REPO_URL` in `server/.dev.vars` (or wrangler secrets) |
+| `setup.sh` cannot reach worker | Pass worker URL as first arg: `./setup.sh http://localhost:8787 …` |
+| Wrangler crashes on hot reload (`SQLITE_BUSY`) | Kill port 8787 and restart `cd server && npm run dev` |

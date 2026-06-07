@@ -8,14 +8,29 @@ An interactive presentation platform for AI workshops. The presenter drives a sl
 
 ## Setup (allowed-domain participants)
 
-Run this in your terminal (replace the worker URL with your organizer's deployed worker):
+Your organizer provides a **worker URL** (e.g. `https://your-worker.YOUR-SUBDOMAIN.workers.dev`). Run:
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/meriial/coop-game/main/setup.sh) \
   https://your-worker.YOUR-SUBDOMAIN.workers.dev
 ```
 
-You'll be prompted for an email on an allowed domain (`ALLOWED_EMAIL_DOMAINS` on that worker). A magic link will arrive in your inbox — click it to authenticate, and your browser will open the presentation automatically.
+Or pass your email on the same line:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/meriial/coop-game/main/setup.sh) \
+  https://your-worker.YOUR-SUBDOMAIN.workers.dev you@your-allowed-domain.example
+```
+
+**What `setup.sh` does:**
+
+1. `GET /auth/config` on the worker — reads `allowed_email_domains` and `repo_url` (no local env vars needed)
+2. Validates your email domain against that list
+3. `POST /auth/request` — magic link (emailed in production, printed locally)
+4. Clones the repo from `repo_url` and writes your JWT to `frontend/.env`
+5. Starts the presentation frontend
+
+You'll be prompted for an email if you omit it. The email must be on a domain listed in the worker's `ALLOWED_EMAIL_DOMAINS` secret.
 
 **What you see depends on who you are:**
 - **Participants** — slides sync in real-time, vote in polls, paint the pixel heart
@@ -42,7 +57,7 @@ Quick start:
 ```bash
 ./dev.sh you@your-allowed-domain.example   # starts Worker + frontend, opens presenter
 node scripts/verify-presentation-e2e.mjs # presenter + participant E2E (Worker must be running)
-cd server && npm test                    # 21 automated WebSocket tests (no servers needed)
+cd server && npm test                    # 25 automated WebSocket tests (no servers needed)
 ```
 
 ## MCP agents
@@ -154,28 +169,34 @@ pnpm exec wrangler secret put ADMIN_EMAIL      # presenter email (must be on an 
 pnpm exec wrangler secret put ALLOWED_EMAIL_DOMAINS  # comma-separated, e.g. your-domain.example,other.example
 pnpm exec wrangler secret put REPO_URL               # git URL for setup.sh to clone
 
-# 4. Deploy
-pnpm exec wrangler deploy
+# 4. Deploy (builds the frontend, then deploys the worker)
+pnpm deploy:wrangler
 ```
 
 ### Local development
 
 ```bash
-# Copy server/.dev.vars.example → server/.dev.vars and set JWT_SECRET, ADMIN_EMAIL, ALLOWED_EMAIL_DOMAINS.
+# Copy server/.dev.vars.example → server/.dev.vars and set JWT_SECRET, ADMIN_EMAIL, ALLOWED_EMAIL_DOMAINS, REPO_URL.
 # No RESEND_API_KEY → magic links and invite emails are stored in KV instead of sent.
 
 cp server/.dev.vars.example server/.dev.vars   # first time only
 cd server && pnpm dev        # worker on http://localhost:8787
 ```
 
-Then in a second terminal, run setup pointed at localhost — the magic link prints directly in the terminal:
+Then in a second terminal, authenticate via setup (magic link prints in the terminal):
 
 ```bash
+# From the repo (after cp .dev.vars.example → .dev.vars)
+./setup.sh http://localhost:8787 you@your-allowed-domain.example
+
+# Or curl the script (same args: <worker-url> [email])
 bash <(curl -fsSL https://raw.githubusercontent.com/meriial/coop-game/main/setup.sh) \
   http://localhost:8787 you@your-allowed-domain.example
 ```
 
-This authenticates you, writes your token to `frontend/.env`, and opens `http://localhost:5174` as the presenter. Open a second browser window at `http://localhost:5174` (in a private/incognito window with no token) to see the participant view.
+From the repo you can also use `./dev.sh you@your-allowed-domain.example` — it starts servers and opens the presenter URL in one step.
+
+`setup.sh` writes your token to `frontend/.env` and starts the frontend. Open a second browser window at `http://localhost:5174` (incognito, no token) to see the participant view.
 
 **Testing guest invites locally:** Click "+ Invite" in the presenter control bar, enter any name and email, and click Send. Because there's no `RESEND_API_KEY`, the invite link is returned directly in the modal — copy it and open it in a new incognito tab to join as that guest. To inspect the email that would have been sent: `curl http://localhost:8787/auth/inbox`
 

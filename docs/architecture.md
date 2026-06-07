@@ -18,7 +18,7 @@ Browser (frontend Vite app)
 │                                             │
 │  /room/{id}  → JWT auth → PresentationRoom│
 │  /ws         → GameRoom (legacy starter)    │
-│  /auth/*     → magic-link + guest invite   │
+│  /auth/*     → config, magic-link, guest invite │
 └─────────────────────┬───────────────────────┘
                       │  DO binding: PRESENTATION_ROOM
                       │  idFromName(roomId)
@@ -123,6 +123,23 @@ All messages are JSON. Types are defined in `@workshop/protocol`.
 | `POLL_UPDATES` / `POLL_RESET` | Poll aggregates |
 | `CONNECTED_USERS` | Who is in the room |
 
+## Authentication
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/auth/config` | GET | Public: `allowed_email_domains`, `repo_url` for `setup.sh` |
+| `/auth/request` | POST | Start magic-link flow (`{ email }`) |
+| `/auth/verify` | GET | Click magic link → approve device |
+| `/auth/poll` | GET | Poll for `agentToken` JWT |
+| `/auth/inbox` | GET | Local dev: list unsent magic links (no Resend) |
+| `/auth/guest-invite` | POST | Presenter sends signed guest invite |
+
+**Secrets** (`.dev.vars` locally, `wrangler secret` in production): `JWT_SECRET`, `ADMIN_EMAIL`, `ALLOWED_EMAIL_DOMAINS`, `REPO_URL`. Optional: `RESEND_API_KEY`, `FROM_EMAIL`.
+
+Magic-link auth rejects emails not on `ALLOWED_EMAIL_DOMAINS` (**403**). Missing config returns **500** (fail fast).
+
+Room WebSocket auth: JWT in `?token=`. Presenter role when email equals `ADMIN_EMAIL`. Agents add `?agentLabel=`.
+
 ## Player identity
 
 The `players` table stores:
@@ -182,7 +199,7 @@ MCP cannot push to the LLM mid-turn; real-time events arrive on the DO→bridge 
 Outside-in BDD tests exercise the **real** Worker + `PresentationRoom` Durable Object (SQLite, alarms) via Vitest and `@cloudflare/vitest-pool-workers`.
 
 ```bash
-cd server && npm test          # 21 WebSocket boundary tests
+cd server && npm test          # 25 WebSocket boundary tests
 cd packages/mcp-server && npm test
 npm test                       # both, from repo root
 ```
@@ -201,11 +218,12 @@ For spinning up servers, obtaining JWTs, browser checks, and MCP smoke tests, se
 | Frontend | Vite on `:5174` | Built to `frontend/dist`, served as Worker assets |
 | DO storage | SQLite in Miniflare; resets between test files | Persistent |
 | Auth emails | KV inbox (`/auth/inbox`) when no `RESEND_API_KEY` | Resend |
+| Participant config | `GET /auth/config` from local `.dev.vars` | `wrangler secret` for `ALLOWED_EMAIL_DOMAINS`, `REPO_URL` |
 
 ## Deploying
 
 ```bash
-pnpm deploy    # builds frontend, then deploys server
+pnpm deploy:wrangler    # builds frontend, then deploys server (alias: pnpm deploy)
 ```
 
-Requires `wrangler login` and secrets (`JWT_SECRET`, `RESEND_API_KEY`, etc.). See [README](../README.md#for-the-organizer).
+Requires `wrangler login` and secrets (`JWT_SECRET`, `ADMIN_EMAIL`, `ALLOWED_EMAIL_DOMAINS`, `REPO_URL`, optional `RESEND_API_KEY`). See [README](../README.md#for-the-organizer).
