@@ -1,5 +1,6 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
 import type { WsState } from '../../hooks/useWebSocket';
+import { useSounds } from '../../hooks/useSounds';
 
 const MIN_ELEMENTS = 5;
 const MAX_ELEMENTS = 118;
@@ -55,6 +56,50 @@ export function PeriodicMatch({ wsState, send, isHost, myName }: Props) {
     obs.observe(el);
     return () => obs.disconnect();
   }, [recomputeGrid]);
+
+  // Sound effects
+  const { playBleep, playBoop, playBing, playDoorbell } = useSounds();
+
+  // Track previous match state to detect flip events
+  const prevPendingRef = useRef(matchPending);
+  const prevClaimedRef = useRef(matchClaimed);
+  useEffect(() => {
+    const prevPending = prevPendingRef.current;
+    const prevClaimed = prevClaimedRef.current;
+
+    // New pending entry = first flip → bleep
+    for (const pos of Object.keys(matchPending)) {
+      if (!(pos in prevPending)) {
+        playBleep();
+        break;
+      }
+    }
+
+    // Pending entry that disappeared = second flip resolved
+    for (const pos of Object.keys(prevPending)) {
+      if (!(pos in matchPending)) {
+        const idx = parseInt(pos, 10);
+        if (matchClaimed[idx] !== null && matchClaimed[idx] !== prevClaimed[idx]) {
+          playBing();
+        } else if (matchClaimed[idx] === null) {
+          playBoop();
+        }
+        break;
+      }
+    }
+
+    prevPendingRef.current = matchPending;
+    prevClaimedRef.current = matchClaimed;
+  }, [matchPending, matchClaimed]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Doorbell for admin when a new user connects
+  const prevUserCountRef = useRef(wsState.connectedUsers.length);
+  useEffect(() => {
+    if (!isHost) return;
+    const curr = wsState.connectedUsers.length;
+    if (curr > prevUserCountRef.current) playDoorbell();
+    prevUserCountRef.current = curr;
+  }, [wsState.connectedUsers.length, isHost, playDoorbell]);
 
   // Element count input state
   const [inputVal, setInputVal] = useState(String(matchElementCount));
