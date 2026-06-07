@@ -17,6 +17,7 @@ export interface WsState {
   matchBoard: string[];
   matchClaimed: (string | null)[];
   matchPending: Record<string, string>;
+  matchRevealed: Record<string, string>;
   matchPaused: boolean;
   matchScores: MatchScore[];
   matchGameOver: boolean;
@@ -38,6 +39,7 @@ const DEFAULT_STATE: WsState = {
   matchBoard: [],
   matchClaimed: [],
   matchPending: {},
+  matchRevealed: {},
   matchPaused: false,
   matchScores: [],
   matchGameOver: false,
@@ -80,6 +82,7 @@ export function useWebSocket(url: string, disabled = false) {
               matchBoard: (msg.matchBoard as string[]) ?? [],
               matchClaimed: (msg.matchClaimed as (string | null)[]) ?? [],
               matchPending: (msg.matchPending as Record<string, string>) ?? {},
+              matchRevealed: (msg.matchRevealed as Record<string, string>) ?? {},
               matchPaused: (msg.matchPaused as boolean) ?? false,
               matchScores: (msg.matchScores as MatchScore[]) ?? [],
               matchGameOver: (msg.gameOver as boolean) ?? false,
@@ -118,6 +121,7 @@ export function useWebSocket(url: string, disabled = false) {
               matchBoard: (msg.matchBoard as string[]) ?? prev.matchBoard,
               matchClaimed: (msg.matchClaimed as (string | null)[]) ?? prev.matchClaimed,
               matchPending: (msg.matchPending as Record<string, string>) ?? prev.matchPending,
+              matchRevealed: (msg.matchRevealed as Record<string, string>) ?? prev.matchRevealed,
               matchPaused: (msg.matchPaused as boolean) ?? prev.matchPaused,
               matchScores: (msg.matchScores as MatchScore[]) ?? prev.matchScores,
               matchGameOver: (msg.gameOver as boolean) ?? prev.matchGameOver,

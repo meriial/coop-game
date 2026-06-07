@@ -50,6 +50,7 @@ interface MatchState {
   matchBoard: string[];
   matchClaimed: (string | null)[];
   matchPending: Record<string, string>;
+  matchRevealed: Record<string, string>;
   matchPaused: boolean;
   matchScores: { id: string; name: string; color: string; count: number }[];
   matchElementCount: number;
@@ -118,6 +119,9 @@ export class PresentationRoom {
         CREATE TABLE IF NOT EXISTS match_pending (
           player_key TEXT PRIMARY KEY, pos INTEGER NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS match_reveal (
+          pos INTEGER PRIMARY KEY, color TEXT NOT NULL, expiry_ms INTEGER NOT NULL
+        );
       `);
       const cnt = [...this.sql.exec('SELECT COUNT(*) as cnt FROM match_board')][0].cnt as number;
       if (cnt === 0) this.initMatchBoard();
@@ -155,7 +159,7 @@ export class PresentationRoom {
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): void {
+  async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
     let msg: InboundMsg;
     try {
       msg = JSON.parse(typeof message === 'string' ? message : new TextDecoder().decode(message)) as InboundMsg;
@@ -263,6 +267,9 @@ export class PresentationRoom {
       const pendingAt = [...this.sql.exec(`SELECT player_key FROM match_pending WHERE pos = ?`, pos)];
       if (pendingAt.length > 0) return;
 
+      const revealedAt = [...this.sql.exec(`SELECT pos FROM match_reveal WHERE pos = ?`, pos)];
+      if (revealedAt.length > 0) return;
+
       const playerKey = attachment.email || attachment.name;
       const playerRow = [...this.sql.exec(`SELECT color FROM players WHERE id = ?`, playerKey)];
       if (playerRow.length === 0) return;
@@ -287,6 +294,13 @@ export class PresentationRoom {
         if (symbol === firstSymbol) {
           this.sql.exec(`INSERT OR REPLACE INTO match_claimed VALUES (?, ?, ?)`, pos, playerKey, playerColor);
           this.sql.exec(`INSERT OR REPLACE INTO match_claimed VALUES (?, ?, ?)`, firstPos, playerKey, playerColor);
+        } else {
+          // Show both tiles face-up briefly, then auto-hide via alarm
+          const expiry = Date.now() + 1500;
+          this.sql.exec(`INSERT OR REPLACE INTO match_reveal VALUES (?, ?, ?)`, pos, playerColor, expiry);
+          this.sql.exec(`INSERT OR REPLACE INTO match_reveal VALUES (?, ?, ?)`, firstPos, playerColor, expiry);
+          const earliest = [...this.sql.exec(`SELECT MIN(expiry_ms) as t FROM match_reveal`)][0].t as number;
+          await this.ctx.storage.setAlarm(earliest);
         }
       }
 
@@ -305,6 +319,7 @@ export class PresentationRoom {
       if (role !== 'presenter') return;
       this.sql.exec(`DELETE FROM match_claimed`);
       this.sql.exec(`DELETE FROM match_pending`);
+      this.sql.exec(`DELETE FROM match_reveal`);
       this.sql.exec(`DELETE FROM meta WHERE key = 'match_paused'`);
       this.initMatchBoard();
       this.broadcast({ type: 'SYNC_MATCH', ...this.buildMatchState() });
@@ -316,6 +331,16 @@ export class PresentationRoom {
       this.sql.exec(`INSERT OR REPLACE INTO meta VALUES ('match_element_count', ?)`, String(count));
       this.broadcast({ type: 'SYNC_MATCH', ...this.buildMatchState() });
     }
+  }
+
+  async alarm(): Promise<void> {
+    const now = Date.now();
+    this.sql.exec(`DELETE FROM match_reveal WHERE expiry_ms <= ?`, now);
+    this.broadcast({ type: 'SYNC_MATCH', ...this.buildMatchState() });
+    // Re-schedule if more reveals are still pending
+    const rows = [...this.sql.exec(`SELECT MIN(expiry_ms) as t FROM match_reveal`)];
+    const next = rows[0]?.t as number | null;
+    if (next) await this.ctx.storage.setAlarm(next);
   }
 
   webSocketClose(ws: WebSocket): void {
@@ -341,6 +366,7 @@ export class PresentationRoom {
       [deck[i], deck[j]] = [deck[j], deck[i]];
     }
     this.sql.exec(`DELETE FROM match_board`);
+    this.sql.exec(`DELETE FROM match_reveal`);
     for (let i = 0; i < deck.length; i++) {
       this.sql.exec(`INSERT INTO match_board VALUES (?, ?)`, i, deck[i]);
     }
@@ -367,6 +393,12 @@ export class PresentationRoom {
       matchPending[String(row.pos as number)] = row.color as string;
     }
 
+    const revealRows = [...this.sql.exec(`SELECT pos, color FROM match_reveal`)];
+    const matchRevealed: Record<string, string> = {};
+    for (const row of revealRows) {
+      matchRevealed[String(row.pos as number)] = row.color as string;
+    }
+
     const pausedRow = [...this.sql.exec(`SELECT value FROM meta WHERE key = 'match_paused'`)];
     const matchPaused = pausedRow.length > 0 && pausedRow[0].value === 'true';
 
@@ -389,7 +421,7 @@ export class PresentationRoom {
       count: Math.floor((r.cnt as number) / 2),
     }));
 
-    return { matchBoard, matchClaimed, matchPending, matchPaused, matchScores, matchElementCount, gameOver: claimedCount === matchBoard.length };
+    return { matchBoard, matchClaimed, matchPending, matchRevealed, matchPaused, matchScores, matchElementCount, gameOver: claimedCount === matchBoard.length };
   }
 
   private getStepIndex(): number {

@@ -25,7 +25,7 @@ interface Props {
 }
 
 export function PeriodicMatch({ wsState, send, isHost, myName }: Props) {
-  const { matchBoard, matchClaimed, matchPending, matchPaused, matchScores, matchGameOver, matchElementCount } = wsState;
+  const { matchBoard, matchClaimed, matchPending, matchRevealed, matchPaused, matchScores, matchGameOver, matchElementCount } = wsState;
 
   // Grid sizing
   const gridRef = useRef<HTMLDivElement>(null);
@@ -62,35 +62,35 @@ export function PeriodicMatch({ wsState, send, isHost, myName }: Props) {
 
   // Track previous match state to detect flip events
   const prevPendingRef = useRef(matchPending);
+  const prevRevealedRef = useRef(matchRevealed);
   const prevClaimedRef = useRef(matchClaimed);
   useEffect(() => {
     const prevPending = prevPendingRef.current;
-    const prevClaimed = prevClaimedRef.current;
+    const prevRevealed = prevRevealedRef.current;
 
-    // New pending entry = first flip → bleep
+    // New entry in matchPending = first flip → bleep
     for (const pos of Object.keys(matchPending)) {
-      if (!(pos in prevPending)) {
-        playBleep();
-        break;
-      }
+      if (!(pos in prevPending)) { playBleep(); break; }
     }
 
-    // Pending entry that disappeared = second flip resolved
+    // New entry in matchRevealed = mismatch result just arrived → boop
+    for (const pos of Object.keys(matchRevealed)) {
+      if (!(pos in prevRevealed)) { playBoop(); break; }
+    }
+
+    // Entry disappeared from matchPending and is now claimed = match → bing
     for (const pos of Object.keys(prevPending)) {
-      if (!(pos in matchPending)) {
+      if (!(pos in matchPending) && !(pos in matchRevealed)) {
         const idx = parseInt(pos, 10);
-        if (matchClaimed[idx] !== null && matchClaimed[idx] !== prevClaimed[idx]) {
-          playBing();
-        } else if (matchClaimed[idx] === null) {
-          playBoop();
-        }
+        if (matchClaimed[idx] !== null) { playBing(); }
         break;
       }
     }
 
     prevPendingRef.current = matchPending;
+    prevRevealedRef.current = matchRevealed;
     prevClaimedRef.current = matchClaimed;
-  }, [matchPending, matchClaimed]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [matchPending, matchRevealed, matchClaimed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Doorbell for admin when a new user connects
   const prevUserCountRef = useRef(wsState.connectedUsers.length);
@@ -170,18 +170,22 @@ export function PeriodicMatch({ wsState, send, isHost, myName }: Props) {
           }}
         >
           {matchBoard.map((symbol, pos) => {
+            const posKey = String(pos);
             const claimedColor = matchClaimed[pos] ?? null;
-            const pendingColor = matchPending[String(pos)];
+            const pendingColor = matchPending[posKey];
+            const revealedColor = matchRevealed[posKey];
             const isClaimed = claimedColor !== null;
             const isPending = pendingColor !== undefined;
-            const isClickable = !isClaimed && !isPending && !matchPaused && !matchGameOver;
+            const isRevealed = revealedColor !== undefined;
+            const faceUpColor = pendingColor ?? revealedColor ?? null;
+            const isClickable = !isClaimed && !isPending && !isRevealed && !matchPaused && !matchGameOver;
 
             return (
               <Tile
                 key={pos}
                 symbol={symbol}
                 claimedColor={claimedColor}
-                pendingColor={isPending ? pendingColor : null}
+                pendingColor={faceUpColor}
                 isClickable={isClickable}
                 dimmed={matchPaused && !isClaimed}
                 tileSize={tileSize}
