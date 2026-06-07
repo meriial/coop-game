@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
 import type { WsState } from '../../hooks/useWebSocket';
-import { useSounds } from '../../hooks/useSounds';
+import { useSoundContext } from '../../contexts/SoundContext';
 
 const MIN_ELEMENTS = 5;
 const MAX_ELEMENTS = 118;
@@ -57,8 +57,8 @@ export function PeriodicMatch({ wsState, send, isHost, myName }: Props) {
     return () => obs.disconnect();
   }, [recomputeGrid]);
 
-  // Sound effects
-  const { playBleep, playBoop, playBing, playDoorbell } = useSounds();
+  // Sound effects (shared context so volume toggle works from outside the component)
+  const { playBleep, playBoop, playBing, playDoorbell } = useSoundContext();
 
   // Track previous match state to detect flip events
   const prevPendingRef = useRef(matchPending);

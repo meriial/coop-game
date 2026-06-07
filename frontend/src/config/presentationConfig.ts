@@ -10,6 +10,10 @@ export const POLL_QUESTIONS: Record<string, { question: string; options: string[
   },
 };
 
+export function stepHasSound(step: PresentationStep): boolean {
+  return step.type === 'game' && step.gameId === 'periodic-match';
+}
+
 export const presentationSteps: PresentationStep[] = [
   { type: 'game',  gameId: 'periodic-match', drawerOpen: false },
   { type: 'slide', slideIndex: 0, drawerOpen: false },

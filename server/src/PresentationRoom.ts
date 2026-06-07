@@ -120,9 +120,11 @@ export class PresentationRoom {
           player_key TEXT PRIMARY KEY, pos INTEGER NOT NULL
         );
         CREATE TABLE IF NOT EXISTS match_reveal (
-          pos INTEGER PRIMARY KEY, color TEXT NOT NULL, expiry_ms INTEGER NOT NULL
+          pos INTEGER PRIMARY KEY, color TEXT NOT NULL, expiry_ms INTEGER NOT NULL, player_key TEXT NOT NULL DEFAULT ''
         );
       `);
+      // Migrate match_reveal table if player_key column is missing
+      try { this.sql.exec(`ALTER TABLE match_reveal ADD COLUMN player_key TEXT NOT NULL DEFAULT ''`); } catch { /* already exists */ }
       const cnt = [...this.sql.exec('SELECT COUNT(*) as cnt FROM match_board')][0].cnt as number;
       if (cnt === 0) this.initMatchBoard();
     });
@@ -282,6 +284,9 @@ export class PresentationRoom {
       const myPending = [...this.sql.exec(`SELECT pos FROM match_pending WHERE player_key = ?`, playerKey)];
 
       if (myPending.length === 0) {
+        // Block new first flips while player's mismatch reveal is still showing
+        const playerReveal = [...this.sql.exec(`SELECT pos FROM match_reveal WHERE player_key = ?`, playerKey)];
+        if (playerReveal.length > 0) return;
         this.sql.exec(`INSERT OR REPLACE INTO match_pending VALUES (?, ?)`, playerKey, pos);
       } else {
         const firstPos = myPending[0].pos as number;
@@ -295,10 +300,10 @@ export class PresentationRoom {
           this.sql.exec(`INSERT OR REPLACE INTO match_claimed VALUES (?, ?, ?)`, pos, playerKey, playerColor);
           this.sql.exec(`INSERT OR REPLACE INTO match_claimed VALUES (?, ?, ?)`, firstPos, playerKey, playerColor);
         } else {
-          // Show both tiles face-up briefly, then auto-hide via alarm
-          const expiry = Date.now() + 1500;
-          this.sql.exec(`INSERT OR REPLACE INTO match_reveal VALUES (?, ?, ?)`, pos, playerColor, expiry);
-          this.sql.exec(`INSERT OR REPLACE INTO match_reveal VALUES (?, ?, ?)`, firstPos, playerColor, expiry);
+          // Show both tiles face-up for 1s, then auto-hide via alarm
+          const expiry = Date.now() + 1000;
+          this.sql.exec(`INSERT OR REPLACE INTO match_reveal VALUES (?, ?, ?, ?)`, pos, playerColor, expiry, playerKey);
+          this.sql.exec(`INSERT OR REPLACE INTO match_reveal VALUES (?, ?, ?, ?)`, firstPos, playerColor, expiry, playerKey);
           const earliest = [...this.sql.exec(`SELECT MIN(expiry_ms) as t FROM match_reveal`)][0].t as number;
           await this.ctx.storage.setAlarm(earliest);
         }
