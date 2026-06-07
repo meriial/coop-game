@@ -7,13 +7,22 @@ const WS_BASE = (import.meta.env.VITE_WS_URL as string | undefined) ||
   `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`;
 const TOKEN_KEY = 'presenter_token';
 
-function decodeJwtName(token: string): string {
+function decodeJwtPayload(token: string): { name?: string; email?: string } {
   try {
-    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))) as { name?: string };
-    return typeof payload.name === 'string' ? payload.name : 'Guest';
+    return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))) as { name?: string; email?: string };
   } catch {
-    return 'Guest';
+    return {};
   }
+}
+
+function decodeJwtName(token: string): string {
+  const payload = decodeJwtPayload(token);
+  return typeof payload.name === 'string' ? payload.name : 'Guest';
+}
+
+function decodeJwtEmail(token: string): string {
+  const payload = decodeJwtPayload(token);
+  return typeof payload.email === 'string' ? payload.email : '';
 }
 
 function getToken(): string | null {
@@ -62,6 +71,7 @@ export function App() {
 
   const { state, send } = useWebSocket(wsUrl, !token);
   const myName = token ? decodeJwtName(token) : 'Guest';
+  const myOwner = token ? (decodeJwtEmail(token) || myName) : myName;
 
   const toggleDevRole = IS_DEV
     ? () => setDevRoleOverride(prev => (prev ?? state.role) === 'presenter' ? 'participant' : 'presenter')
@@ -87,7 +97,7 @@ export function App() {
   }
 
   if (state.role === 'presenter') {
-    return <PresenterApp state={state} send={send} myName={myName} token={token} onToggleDevRole={toggleDevRole} />;
+    return <PresenterApp state={state} send={send} myName={myName} myOwner={myOwner} token={token} onToggleDevRole={toggleDevRole} />;
   }
-  return <ParticipantApp state={state} send={send} myName={myName} onToggleDevRole={toggleDevRole} />;
+  return <ParticipantApp state={state} send={send} myName={myName} myOwner={myOwner} onToggleDevRole={toggleDevRole} />;
 }

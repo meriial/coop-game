@@ -2,14 +2,23 @@
   "name": "server",
   "version": "0.1.0",
   "private": true,
+  "dependencies": {
+    "@workshop/game-core": "file:../packages/game-core",
+    "@workshop/game-periodic-match": "file:../packages/games/periodic-match",
+    "@workshop/game-pixel-heart": "file:../packages/games/pixel-heart",
+    "@workshop/protocol": "file:../packages/protocol"
+  },
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "vitest run"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.16.13",
     "@cloudflare/workers-types": "^4.0.0",
     "typescript": "^5.7.0",
+    "vitest": "^4.1.8",
     "wrangler": "^4.0.0"
   }
 }

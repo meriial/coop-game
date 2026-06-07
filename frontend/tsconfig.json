@@ -8,7 +8,17 @@
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+    "baseUrl": ".",
+    "paths": {
+      "@frontend/*": ["src/*"],
+      "@workshop/protocol": ["../packages/protocol/src/index.ts"],
+      "@workshop/game-core/client": ["../packages/game-core/src/client/index.ts"],
+      "@workshop/game-periodic-match/client": ["../packages/games/periodic-match/src/client.tsx"],
+      "@workshop/game-periodic-match/types": ["../packages/games/periodic-match/src/types.ts"],
+      "@workshop/game-pixel-heart/client": ["../packages/games/pixel-heart/src/client.tsx"],
+      "@workshop/game-pixel-heart/types": ["../packages/games/pixel-heart/src/types.ts"]
+    }
   },
   "include": ["src"]
 }

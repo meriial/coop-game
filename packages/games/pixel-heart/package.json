@@ -1,0 +1,22 @@
+{
+  "name": "@workshop/game-pixel-heart",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./engine": "./src/engine.ts",
+    "./client": "./src/client.tsx",
+    "./types": "./src/types.ts"
+  },
+  "dependencies": {
+    "@workshop/game-core": "file:../../game-core",
+    "@workshop/protocol": "file:../../protocol"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.6",
+    "typescript": "^5.7.0"
+  }
+}

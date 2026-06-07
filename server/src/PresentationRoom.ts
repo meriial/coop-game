@@ -1,4 +1,8 @@
-const GRID_SIZE = 20;
+import type { ConnectedUser, OutboundMsg, Player, RoomAttachment } from '@workshop/protocol';
+import { createGameContext } from '@workshop/game-core/server';
+import { periodicMatchEngine, clearMatchPendingForPlayer } from '@workshop/game-periodic-match/engine';
+import { pixelHeartEngine } from '@workshop/game-pixel-heart/engine';
+import { gameRegistry } from './game-registry';
 
 const PLAYER_COLORS = [
   '#ef4444', '#3b82f6', '#22c55e', '#f59e0b',
@@ -8,90 +12,24 @@ const PLAYER_COLORS = [
   '#d97706', '#7c3aed', '#0891b2', '#65a30d',
 ];
 
-const T = true, F = false;
-const TARGET: boolean[][] = [
-  [F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F],
-  [F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F],
-  [F,F,F,T,T,T,F,F,F,F,F,F,T,T,T,F,F,F,F,F],
-  [F,F,T,T,T,T,T,F,F,F,F,T,T,T,T,T,F,F,F,F],
-  [F,T,T,T,T,T,T,T,F,F,T,T,T,T,T,T,T,F,F,F],
-  [F,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,F,F],
-  [F,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,F,F],
-  [F,F,T,T,T,T,T,T,T,T,T,T,T,T,T,T,T,F,F,F],
-  [F,F,F,T,T,T,T,T,T,T,T,T,T,T,T,T,F,F,F,F],
-  [F,F,F,F,T,T,T,T,T,T,T,T,T,T,T,F,F,F,F,F],
-  [F,F,F,F,F,T,T,T,T,T,T,T,T,T,F,F,F,F,F,F],
-  [F,F,F,F,F,F,T,T,T,T,T,T,T,F,F,F,F,F,F,F],
-  [F,F,F,F,F,F,F,T,T,T,T,T,F,F,F,F,F,F,F,F],
-  [F,F,F,F,F,F,F,F,T,T,T,F,F,F,F,F,F,F,F,F],
-  [F,F,F,F,F,F,F,F,F,T,F,F,F,F,F,F,F,F,F,F],
-  [F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F],
-  [F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F],
-  [F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F],
-  [F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F],
-  [F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F],
-];
+const PRESENTER_ONLY_GAME_TYPES = new Set(['GAME_RESET', 'MATCH_PAUSE', 'MATCH_RESET', 'MATCH_SET_SIZE']);
 
-const TARGET_CELL_COUNT = TARGET.reduce((sum, row) => sum + row.filter(Boolean).length, 0);
-
-const ELEMENTS = [
-  'H',  'He',
-  'Li', 'Be', 'B',  'C',  'N',  'O',  'F',  'Ne',
-  'Na', 'Mg', 'Al', 'Si', 'P',  'S',  'Cl', 'Ar',
-  'K',  'Ca', 'Sc', 'Ti', 'V',  'Cr', 'Mn', 'Fe', 'Co', 'Ni', 'Cu', 'Zn', 'Ga', 'Ge', 'As', 'Se', 'Br', 'Kr',
-  'Rb', 'Sr', 'Y',  'Zr', 'Nb', 'Mo', 'Tc', 'Ru', 'Rh', 'Pd', 'Ag', 'Cd', 'In', 'Sn', 'Sb', 'Te', 'I',  'Xe',
-  'Cs', 'Ba', 'La', 'Ce', 'Pr', 'Nd', 'Pm', 'Sm', 'Eu', 'Gd', 'Tb', 'Dy', 'Ho', 'Er', 'Tm', 'Yb', 'Lu',
-  'Hf', 'Ta', 'W',  'Re', 'Os', 'Ir', 'Pt', 'Au', 'Hg', 'Tl', 'Pb', 'Bi', 'Po', 'At', 'Rn',
-  'Fr', 'Ra', 'Ac', 'Th', 'Pa', 'U',  'Np', 'Pu', 'Am', 'Cm', 'Bk', 'Cf', 'Es', 'Fm', 'Md', 'No', 'Lr',
-  'Rf', 'Db', 'Sg', 'Bh', 'Hs', 'Mt', 'Ds', 'Rg', 'Cn', 'Nh', 'Fl', 'Mc', 'Lv', 'Ts', 'Og',
-];
-
-interface MatchState {
-  matchBoard: string[];
-  matchClaimed: (string | null)[];
-  matchPending: Record<string, string>;
-  matchRevealed: Record<string, string>;
-  matchPaused: boolean;
-  matchScores: { id: string; name: string; color: string; count: number }[];
-  matchElementCount: number;
-  gameOver: boolean;
-}
-
-interface Attachment {
-  role: 'presenter' | 'participant';
-  email: string;
-  name: string;
-  participantId: string;
-}
-
-type InboundMsg =
-  | { type: 'STEP_CHANGE'; stepIndex: number }
-  | { type: 'SUBMIT_VOTE'; pollId: string; choice: string; pollType?: string }
-  | { type: 'RESET_POLL'; pollId: string }
-  | { type: 'GAME_JOIN'; name: string }
-  | { type: 'GAME_PAINT'; x: number; y: number }
-  | { type: 'GAME_RESET' }
-  | { type: 'MATCH_FLIP'; pos: number }
-  | { type: 'MATCH_PAUSE' }
-  | { type: 'MATCH_RESET' }
-  | { type: 'MATCH_SET_SIZE'; count: number };
-
-type ConnectedUser = { name: string; color?: string };
-
-type OutboundMsg =
-  | ({ type: 'WELCOME'; stepIndex: number; role: string; canvas: (string | null)[][]; progress: number; players: Record<string, { id: string; name: string; color: string }>; pollResults: Record<string, Record<string, number>>; pollValues: Record<string, string[]> } & MatchState)
-  | { type: 'SYNC_STEP'; stepIndex: number }
-  | { type: 'POLL_UPDATES'; pollId: string; results?: Record<string, number>; values?: string[] }
-  | { type: 'POLL_RESET'; pollId: string }
-  | { type: 'SYNC_CANVAS'; canvas: (string | null)[][]; progress: number; players: Record<string, { id: string; name: string; color: string }> }
-  | ({ type: 'SYNC_MATCH' } & MatchState)
-  | { type: 'CONNECTED_USERS'; users: ConnectedUser[] };
+type InboundMsg = { type: string; [key: string]: unknown };
 
 export class PresentationRoom {
   private sql: SqlStorage;
+  private gameCtx: ReturnType<typeof createGameContext>;
 
   constructor(private readonly ctx: DurableObjectState) {
     this.sql = ctx.storage.sql;
+    this.gameCtx = createGameContext(this.sql, {
+      getPlayers: () => this.getPlayers(),
+      broadcast: (msg) => this.broadcast(msg as OutboundMsg),
+      scheduleAlarm: (atMs) => this.ctx.storage.setAlarm(atMs),
+      playerKey: (email, name) => email || name,
+      assignColor: (playerKey) => this.assignColor(playerKey),
+    });
+
     ctx.blockConcurrencyWhile(async () => {
       this.sql.exec(`
         CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -107,30 +45,15 @@ export class PresentationRoom {
           poll_id TEXT NOT NULL, participant_id TEXT NOT NULL, value TEXT NOT NULL,
           PRIMARY KEY (poll_id, participant_id)
         );
-        CREATE TABLE IF NOT EXISTS canvas_cells (
-          x INTEGER NOT NULL, y INTEGER NOT NULL, color TEXT NOT NULL, painted_by TEXT NOT NULL,
-          PRIMARY KEY (x, y)
-        );
         CREATE TABLE IF NOT EXISTS players (
-          id TEXT PRIMARY KEY, name TEXT NOT NULL, color TEXT NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS match_board (
-          pos INTEGER PRIMARY KEY, symbol TEXT NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS match_claimed (
-          pos INTEGER PRIMARY KEY, player_key TEXT NOT NULL, color TEXT NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS match_pending (
-          player_key TEXT PRIMARY KEY, pos INTEGER NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS match_reveal (
-          pos INTEGER PRIMARY KEY, color TEXT NOT NULL, expiry_ms INTEGER NOT NULL, player_key TEXT NOT NULL DEFAULT ''
+          id TEXT PRIMARY KEY, name TEXT NOT NULL, color TEXT NOT NULL,
+          owner_id TEXT NOT NULL DEFAULT '', is_agent INTEGER NOT NULL DEFAULT 0, agent_label TEXT
         );
       `);
-      // Migrate match_reveal table if player_key column is missing
-      try { this.sql.exec(`ALTER TABLE match_reveal ADD COLUMN player_key TEXT NOT NULL DEFAULT ''`); } catch { /* already exists */ }
-      const cnt = [...this.sql.exec('SELECT COUNT(*) as cnt FROM match_board')][0].cnt as number;
-      if (cnt === 0) this.initMatchBoard();
+      try { this.sql.exec(`ALTER TABLE players ADD COLUMN owner_id TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
+      try { this.sql.exec(`ALTER TABLE players ADD COLUMN is_agent INTEGER NOT NULL DEFAULT 0`); } catch { /* exists */ }
+      try { this.sql.exec(`ALTER TABLE players ADD COLUMN agent_label TEXT`); } catch { /* exists */ }
+      gameRegistry.initAll(this.gameCtx);
     });
   }
 
@@ -139,19 +62,48 @@ export class PresentationRoom {
       return new Response('Expected WebSocket upgrade', { status: 426 });
     }
 
+    const reqUrl = new URL(request.url);
+    const agentLabel = reqUrl.searchParams.get('agentLabel')?.trim() || undefined;
     const role = (request.headers.get('X-User-Role') ?? 'participant') as 'presenter' | 'participant';
     const email = request.headers.get('X-User-Email') ?? '';
     const name = request.headers.get('X-User-Name') ?? 'Guest';
+    const ownerId = email;
+    const isAgent = Boolean(agentLabel);
     const participantId = crypto.randomUUID();
+
+    if (isAgent) {
+      const activeGameId = this.getActiveGameId();
+      const engine = activeGameId ? gameRegistry.get(activeGameId) : undefined;
+      const cap = engine?.config?.maxAgentsPerOwner;
+      if (cap !== undefined) {
+        const existing = [...this.sql.exec(
+          `SELECT COUNT(*) as cnt FROM players WHERE owner_id = ? AND is_agent = 1`,
+          ownerId,
+        )][0].cnt as number;
+        if (existing >= cap) {
+          return new Response(`Agent limit (${cap}) reached for this owner`, { status: 403 });
+        }
+      }
+    }
+
+    const displayName = isAgent && agentLabel ? `${name}'s ${agentLabel}` : name;
 
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
 
     this.ctx.acceptWebSocket(server);
-    server.serializeAttachment({ role, email, name, participantId } satisfies Attachment);
+    server.serializeAttachment({
+      role,
+      email,
+      name: displayName,
+      participantId,
+      ownerId,
+      isAgent,
+      agentLabel,
+    } satisfies RoomAttachment);
 
-    const canvasState = this.buildCanvasState();
-    const matchState = this.buildMatchState();
+    const matchState = periodicMatchEngine.buildState(this.gameCtx);
+    const canvasState = pixelHeartEngine.buildState(this.gameCtx);
     const stepIndex = this.getStepIndex();
     server.send(JSON.stringify({
       type: 'WELCOME',
@@ -175,200 +127,72 @@ export class PresentationRoom {
       return;
     }
 
-    const attachment = ws.deserializeAttachment() as Attachment;
+    const attachment = ws.deserializeAttachment() as RoomAttachment;
     const { role, participantId } = attachment;
 
     if (msg.type === 'STEP_CHANGE') {
       if (role !== 'presenter') return;
-      const idx = Math.max(0, Math.floor(msg.stepIndex));
+      const idx = Math.max(0, Math.floor(msg.stepIndex as number));
       this.sql.exec(`INSERT OR REPLACE INTO meta VALUES ('stepIndex', ?)`, String(idx));
       this.broadcast({ type: 'SYNC_STEP', stepIndex: idx });
+      return;
     }
 
-    else if (msg.type === 'SUBMIT_VOTE') {
-      const { pollId, choice, pollType } = msg;
-
-      if (pollType === 'slider1d' || pollType === 'slider2d') {
-        this.sql.exec(
-          `INSERT INTO slider_records (poll_id, participant_id, value) VALUES (?, ?, ?)
-           ON CONFLICT(poll_id, participant_id) DO UPDATE SET value = excluded.value`,
-          pollId, participantId, choice
-        );
-        this.broadcast({ type: 'POLL_UPDATES', pollId, values: this.getSliderValues(pollId) });
-      } else {
-        const existing = [...this.sql.exec(
-          `SELECT choice FROM vote_records WHERE poll_id = ? AND participant_id = ?`,
-          pollId, participantId
-        )];
-        const previousChoice = existing.length > 0 ? existing[0].choice as string : null;
-
-        if (previousChoice === choice) {
-          this.sql.exec(`DELETE FROM vote_records WHERE poll_id = ? AND participant_id = ?`, pollId, participantId);
-          this.sql.exec(`UPDATE votes SET count = MAX(0, count - 1) WHERE poll_id = ? AND choice = ?`, pollId, choice);
-        } else {
-          if (previousChoice !== null) {
-            this.sql.exec(`UPDATE votes SET count = MAX(0, count - 1) WHERE poll_id = ? AND choice = ?`, pollId, previousChoice);
-          }
-          this.sql.exec(
-            `INSERT INTO votes (poll_id, choice, count) VALUES (?, ?, 1)
-             ON CONFLICT(poll_id, choice) DO UPDATE SET count = count + 1`,
-            pollId, choice
-          );
-          this.sql.exec(
-            `INSERT INTO vote_records (poll_id, participant_id, choice) VALUES (?, ?, ?)
-             ON CONFLICT(poll_id, participant_id) DO UPDATE SET choice = excluded.choice`,
-            pollId, participantId, choice
-          );
-        }
-        this.broadcast({ type: 'POLL_UPDATES', pollId, results: this.getPollResults(pollId) });
-      }
+    if (msg.type === 'SUBMIT_VOTE') {
+      await this.handleVote(participantId, msg);
+      return;
     }
 
-    else if (msg.type === 'RESET_POLL') {
+    if (msg.type === 'RESET_POLL') {
       if (role !== 'presenter') return;
-      const { pollId } = msg;
+      const pollId = msg.pollId as string;
       this.sql.exec(`DELETE FROM votes WHERE poll_id = ?`, pollId);
       this.sql.exec(`DELETE FROM vote_records WHERE poll_id = ?`, pollId);
       this.sql.exec(`DELETE FROM slider_records WHERE poll_id = ?`, pollId);
       this.broadcast({ type: 'POLL_RESET', pollId });
+      return;
     }
 
-    else if (msg.type === 'GAME_JOIN') {
-      const playerKey = attachment.email || attachment.name;
-      this.sql.exec(`DELETE FROM players WHERE length(id) = 36 AND id LIKE '________-____-____-____-____________'`);
-      const existing = [...this.sql.exec(`SELECT color FROM players WHERE id = ?`, playerKey)];
-      let color: string;
-      if (existing.length > 0) {
-        color = existing[0].color as string;
-      } else {
-        const indexRow = [...this.sql.exec(`SELECT value FROM meta WHERE key = 'colorIndex'`)];
-        const idx = indexRow.length > 0 ? parseInt(indexRow[0].value as string, 10) : 0;
-        color = PLAYER_COLORS[idx % PLAYER_COLORS.length];
-        this.sql.exec(`INSERT OR REPLACE INTO meta VALUES ('colorIndex', ?)`, String(idx + 1));
-      }
-      const displayName = msg.name.slice(0, 30);
-      this.sql.exec(`INSERT OR REPLACE INTO players VALUES (?, ?, ?)`, playerKey, displayName, color);
-      this.broadcast({ type: 'SYNC_CANVAS', ...this.buildCanvasState() });
-      this.broadcast({ type: 'SYNC_MATCH', ...this.buildMatchState() });
+    if (msg.type === 'GAME_JOIN') {
+      const player = this.upsertPlayer(attachment, msg.name as string);
+      this.broadcast({ type: 'SYNC_CANVAS', ...pixelHeartEngine.buildState(this.gameCtx) });
+      this.broadcast({ type: 'SYNC_MATCH', ...periodicMatchEngine.buildState(this.gameCtx) });
       this.broadcastConnectedUsers();
+      periodicMatchEngine.onJoin?.(player, this.gameCtx);
+      pixelHeartEngine.onJoin?.(player, this.gameCtx);
+      return;
     }
 
-    else if (msg.type === 'GAME_PAINT') {
-      const { x, y } = msg;
-      if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE || !TARGET[y][x]) return;
-      const playerKey = attachment.email || attachment.name;
-      const playerRow = [...this.sql.exec(`SELECT color FROM players WHERE id = ?`, playerKey)];
-      if (playerRow.length === 0) return;
-      const color = playerRow[0].color as string;
-      this.sql.exec(
-        `INSERT OR REPLACE INTO canvas_cells VALUES (?, ?, ?, ?)`,
-        x, y, color, playerKey
-      );
-      this.broadcast({ type: 'SYNC_CANVAS', ...this.buildCanvasState() });
+    if (PRESENTER_ONLY_GAME_TYPES.has(msg.type) && role !== 'presenter') return;
+
+    const engine = gameRegistry.route(msg.type);
+    if (!engine) return;
+
+    const playerKey = attachment.email || attachment.name;
+    let player = this.getPlayerById(playerKey);
+    if (!player && role === 'presenter' && PRESENTER_ONLY_GAME_TYPES.has(msg.type)) {
+      player = {
+        id: playerKey,
+        name: attachment.name,
+        color: '#64748b',
+        ownerId: attachment.ownerId ?? attachment.email ?? attachment.name,
+        isAgent: Boolean(attachment.isAgent),
+        agentLabel: attachment.agentLabel,
+      };
     }
+    if (!player) return;
 
-    else if (msg.type === 'GAME_RESET') {
-      if (role !== 'presenter') return;
-      this.sql.exec(`DELETE FROM canvas_cells`);
-      this.broadcast({ type: 'SYNC_CANVAS', ...this.buildCanvasState() });
-    }
-
-    else if (msg.type === 'MATCH_FLIP') {
-      const pos = typeof msg.pos === 'number' ? Math.floor(msg.pos) : -1;
-      if (pos < 0 || pos >= ELEMENTS.length * 2) return;
-
-      const pausedRow = [...this.sql.exec(`SELECT value FROM meta WHERE key = 'match_paused'`)];
-      if (pausedRow.length > 0 && pausedRow[0].value === 'true') return;
-
-      const claimedAt = [...this.sql.exec(`SELECT pos FROM match_claimed WHERE pos = ?`, pos)];
-      if (claimedAt.length > 0) return;
-
-      const pendingAt = [...this.sql.exec(`SELECT player_key FROM match_pending WHERE pos = ?`, pos)];
-      if (pendingAt.length > 0) return;
-
-      const revealedAt = [...this.sql.exec(`SELECT pos FROM match_reveal WHERE pos = ?`, pos)];
-      if (revealedAt.length > 0) return;
-
-      const playerKey = attachment.email || attachment.name;
-      const playerRow = [...this.sql.exec(`SELECT color FROM players WHERE id = ?`, playerKey)];
-      if (playerRow.length === 0) return;
-      const playerColor = playerRow[0].color as string;
-
-      const symbolRow = [...this.sql.exec(`SELECT symbol FROM match_board WHERE pos = ?`, pos)];
-      if (symbolRow.length === 0) return;
-      const symbol = symbolRow[0].symbol as string;
-
-      const myPending = [...this.sql.exec(`SELECT pos FROM match_pending WHERE player_key = ?`, playerKey)];
-
-      if (myPending.length === 0) {
-        // Block new first flips while player's mismatch reveal is still showing
-        const playerReveal = [...this.sql.exec(`SELECT pos FROM match_reveal WHERE player_key = ?`, playerKey)];
-        if (playerReveal.length > 0) return;
-        this.sql.exec(`INSERT OR REPLACE INTO match_pending VALUES (?, ?)`, playerKey, pos);
-      } else {
-        const firstPos = myPending[0].pos as number;
-        if (firstPos === pos) return;
-
-        const firstRow = [...this.sql.exec(`SELECT symbol FROM match_board WHERE pos = ?`, firstPos)];
-        const firstSymbol = firstRow.length > 0 ? firstRow[0].symbol as string : '';
-        this.sql.exec(`DELETE FROM match_pending WHERE player_key = ?`, playerKey);
-
-        if (symbol === firstSymbol) {
-          this.sql.exec(`INSERT OR REPLACE INTO match_claimed VALUES (?, ?, ?)`, pos, playerKey, playerColor);
-          this.sql.exec(`INSERT OR REPLACE INTO match_claimed VALUES (?, ?, ?)`, firstPos, playerKey, playerColor);
-        } else {
-          // Show both tiles face-up for 1s, then auto-hide via alarm
-          const expiry = Date.now() + 1000;
-          this.sql.exec(`INSERT OR REPLACE INTO match_reveal VALUES (?, ?, ?, ?)`, pos, playerColor, expiry, playerKey);
-          this.sql.exec(`INSERT OR REPLACE INTO match_reveal VALUES (?, ?, ?, ?)`, firstPos, playerColor, expiry, playerKey);
-          const earliest = [...this.sql.exec(`SELECT MIN(expiry_ms) as t FROM match_reveal`)][0].t as number;
-          await this.ctx.storage.setAlarm(earliest);
-        }
-      }
-
-      this.broadcast({ type: 'SYNC_MATCH', ...this.buildMatchState() });
-    }
-
-    else if (msg.type === 'MATCH_PAUSE') {
-      if (role !== 'presenter') return;
-      const pausedRow = [...this.sql.exec(`SELECT value FROM meta WHERE key = 'match_paused'`)];
-      const currentlyPaused = pausedRow.length > 0 && pausedRow[0].value === 'true';
-      this.sql.exec(`INSERT OR REPLACE INTO meta VALUES ('match_paused', ?)`, currentlyPaused ? 'false' : 'true');
-      this.broadcast({ type: 'SYNC_MATCH', ...this.buildMatchState() });
-    }
-
-    else if (msg.type === 'MATCH_RESET') {
-      if (role !== 'presenter') return;
-      this.sql.exec(`DELETE FROM match_claimed`);
-      this.sql.exec(`DELETE FROM match_pending`);
-      this.sql.exec(`DELETE FROM match_reveal`);
-      this.sql.exec(`DELETE FROM meta WHERE key = 'match_paused'`);
-      this.initMatchBoard();
-      this.broadcast({ type: 'SYNC_MATCH', ...this.buildMatchState() });
-    }
-
-    else if (msg.type === 'MATCH_SET_SIZE') {
-      if (role !== 'presenter') return;
-      const count = Math.min(Math.max(5, Math.floor(msg.count)), ELEMENTS.length);
-      this.sql.exec(`INSERT OR REPLACE INTO meta VALUES ('match_element_count', ?)`, String(count));
-      this.broadcast({ type: 'SYNC_MATCH', ...this.buildMatchState() });
-    }
+    await engine.handleMessage(player, msg, this.gameCtx);
   }
 
   async alarm(): Promise<void> {
-    const now = Date.now();
-    this.sql.exec(`DELETE FROM match_reveal WHERE expiry_ms <= ?`, now);
-    this.broadcast({ type: 'SYNC_MATCH', ...this.buildMatchState() });
-    // Re-schedule if more reveals are still pending
-    const rows = [...this.sql.exec(`SELECT MIN(expiry_ms) as t FROM match_reveal`)];
-    const next = rows[0]?.t as number | null;
-    if (next) await this.ctx.storage.setAlarm(next);
+    await periodicMatchEngine.onAlarm?.(this.gameCtx);
   }
 
   webSocketClose(ws: WebSocket): void {
-    const att = ws.deserializeAttachment() as Attachment;
+    const att = ws.deserializeAttachment() as RoomAttachment;
     const playerKey = att.email || att.name;
-    this.sql.exec(`DELETE FROM match_pending WHERE player_key = ?`, playerKey);
+    clearMatchPendingForPlayer(this.gameCtx, playerKey);
     this.broadcastConnectedUsers(ws);
   }
 
@@ -376,74 +200,123 @@ export class PresentationRoom {
     this.broadcastConnectedUsers(ws);
   }
 
-  private initMatchBoard(): void {
-    const countRow = [...this.sql.exec(`SELECT value FROM meta WHERE key = 'match_element_count'`)];
-    const count = countRow.length > 0
-      ? Math.min(Math.max(5, parseInt(countRow[0].value as string, 10)), ELEMENTS.length)
-      : ELEMENTS.length;
-    const elements = ELEMENTS.slice(0, count);
-    const deck = [...elements, ...elements];
-    for (let i = deck.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [deck[i], deck[j]] = [deck[j], deck[i]];
-    }
-    this.sql.exec(`DELETE FROM match_board`);
-    this.sql.exec(`DELETE FROM match_reveal`);
-    for (let i = 0; i < deck.length; i++) {
-      this.sql.exec(`INSERT INTO match_board VALUES (?, ?)`, i, deck[i]);
-    }
+  getActiveGameId(): string | null {
+    const stepIndex = this.getStepIndex();
+    const steps = this.getPresentationSteps();
+    const step = steps[stepIndex];
+    return step?.type === 'game' ? step.gameId : null;
   }
 
-  private buildMatchState(): MatchState {
-    const boardRows = [...this.sql.exec(`SELECT symbol FROM match_board ORDER BY pos`)];
-    const matchBoard = boardRows.map(r => r.symbol as string);
-
-    const claimedRows = [...this.sql.exec(`SELECT pos, color FROM match_claimed`)];
-    const matchClaimed: (string | null)[] = Array(matchBoard.length).fill(null);
-    for (const row of claimedRows) {
-      matchClaimed[row.pos as number] = row.color as string;
+  private getPresentationSteps(): { type: string; gameId?: string }[] {
+    const raw = this.gameCtx.meta.get('presentation_steps');
+    if (raw) {
+      try { return JSON.parse(raw) as { type: string; gameId?: string }[]; } catch { /* fall through */ }
     }
-    const claimedCount = claimedRows.length;
+    return [
+      { type: 'game', gameId: 'periodic-match' },
+      { type: 'slide' },
+      { type: 'slide' },
+      { type: 'poll' },
+      { type: 'poll' },
+      { type: 'poll' },
+      { type: 'results' },
+      { type: 'game', gameId: 'pixel-heart' },
+      { type: 'slide' },
+    ];
+  }
 
-    const pendingRows = [...this.sql.exec(`
-      SELECT mp.pos, COALESCE(p.color, '#64748b') as color
-      FROM match_pending mp
-      LEFT JOIN players p ON p.id = mp.player_key
-    `)];
-    const matchPending: Record<string, string> = {};
-    for (const row of pendingRows) {
-      matchPending[String(row.pos as number)] = row.color as string;
-    }
+  private upsertPlayer(att: RoomAttachment, rawName: string): Player {
+    const playerKey = att.email || att.name;
+    this.sql.exec(`DELETE FROM players WHERE length(id) = 36 AND id LIKE '________-____-____-____-____________'`);
+    const color = this.assignColor(playerKey);
+    const displayName = rawName.slice(0, 30);
+    const ownerId = att.ownerId ?? att.email ?? att.name;
+    const isAgent = att.isAgent ? 1 : 0;
+    this.sql.exec(
+      `INSERT OR REPLACE INTO players (id, name, color, owner_id, is_agent, agent_label) VALUES (?, ?, ?, ?, ?, ?)`,
+      playerKey,
+      displayName,
+      color,
+      ownerId,
+      isAgent,
+      att.agentLabel ?? null,
+    );
+    return {
+      id: playerKey,
+      name: displayName,
+      color,
+      ownerId,
+      isAgent: Boolean(att.isAgent),
+      agentLabel: att.agentLabel,
+    };
+  }
 
-    const revealRows = [...this.sql.exec(`SELECT pos, color FROM match_reveal`)];
-    const matchRevealed: Record<string, string> = {};
-    for (const row of revealRows) {
-      matchRevealed[String(row.pos as number)] = row.color as string;
-    }
+  private getPlayerById(id: string): Player | undefined {
+    return this.getPlayers().find((p) => p.id === id);
+  }
 
-    const pausedRow = [...this.sql.exec(`SELECT value FROM meta WHERE key = 'match_paused'`)];
-    const matchPaused = pausedRow.length > 0 && pausedRow[0].value === 'true';
-
-    const countRow = [...this.sql.exec(`SELECT value FROM meta WHERE key = 'match_element_count'`)];
-    const matchElementCount = countRow.length > 0
-      ? Math.min(Math.max(5, parseInt(countRow[0].value as string, 10)), ELEMENTS.length)
-      : ELEMENTS.length;
-
-    const scoreRows = [...this.sql.exec(`
-      SELECT p.id, p.name, p.color, COUNT(mc.pos) as cnt
-      FROM players p
-      LEFT JOIN match_claimed mc ON mc.player_key = p.id
-      GROUP BY p.id
-      ORDER BY cnt DESC
-    `)];
-    const matchScores = scoreRows.map(r => ({
-      id: r.id as string,
-      name: r.name as string,
-      color: r.color as string,
-      count: Math.floor((r.cnt as number) / 2),
+  private getPlayers(): Player[] {
+    const rows = [...this.sql.exec(`SELECT id, name, color, owner_id, is_agent, agent_label FROM players`)];
+    return rows.map((row) => ({
+      id: row.id as string,
+      name: row.name as string,
+      color: row.color as string,
+      ownerId: (row.owner_id as string) || (row.id as string),
+      isAgent: Boolean(row.is_agent),
+      agentLabel: (row.agent_label as string | null) ?? undefined,
     }));
+  }
 
-    return { matchBoard, matchClaimed, matchPending, matchRevealed, matchPaused, matchScores, matchElementCount, gameOver: claimedCount === matchBoard.length };
+  private assignColor(playerKey: string): string {
+    const existing = [...this.sql.exec(`SELECT color FROM players WHERE id = ?`, playerKey)];
+    if (existing.length > 0) return existing[0].color as string;
+    const indexRow = [...this.sql.exec(`SELECT value FROM meta WHERE key = 'colorIndex'`)];
+    const idx = indexRow.length > 0 ? parseInt(indexRow[0].value as string, 10) : 0;
+    const color = PLAYER_COLORS[idx % PLAYER_COLORS.length];
+    this.sql.exec(`INSERT OR REPLACE INTO meta VALUES ('colorIndex', ?)`, String(idx + 1));
+    return color;
+  }
+
+  private async handleVote(participantId: string, msg: InboundMsg): Promise<void> {
+    const pollId = msg.pollId as string;
+    const choice = msg.choice as string;
+    const pollType = msg.pollType as string | undefined;
+
+    if (pollType === 'slider1d' || pollType === 'slider2d') {
+      this.sql.exec(
+        `INSERT INTO slider_records (poll_id, participant_id, value) VALUES (?, ?, ?)
+         ON CONFLICT(poll_id, participant_id) DO UPDATE SET value = excluded.value`,
+        pollId, participantId, choice,
+      );
+      this.broadcast({ type: 'POLL_UPDATES', pollId, values: this.getSliderValues(pollId) });
+      return;
+    }
+
+    const existing = [...this.sql.exec(
+      `SELECT choice FROM vote_records WHERE poll_id = ? AND participant_id = ?`,
+      pollId, participantId,
+    )];
+    const previousChoice = existing.length > 0 ? existing[0].choice as string : null;
+
+    if (previousChoice === choice) {
+      this.sql.exec(`DELETE FROM vote_records WHERE poll_id = ? AND participant_id = ?`, pollId, participantId);
+      this.sql.exec(`UPDATE votes SET count = MAX(0, count - 1) WHERE poll_id = ? AND choice = ?`, pollId, choice);
+    } else {
+      if (previousChoice !== null) {
+        this.sql.exec(`UPDATE votes SET count = MAX(0, count - 1) WHERE poll_id = ? AND choice = ?`, pollId, previousChoice);
+      }
+      this.sql.exec(
+        `INSERT INTO votes (poll_id, choice, count) VALUES (?, ?, 1)
+         ON CONFLICT(poll_id, choice) DO UPDATE SET count = count + 1`,
+        pollId, choice,
+      );
+      this.sql.exec(
+        `INSERT INTO vote_records (poll_id, participant_id, choice) VALUES (?, ?, ?)
+         ON CONFLICT(poll_id, participant_id) DO UPDATE SET choice = excluded.choice`,
+        pollId, participantId, choice,
+      );
+    }
+    this.broadcast({ type: 'POLL_UPDATES', pollId, results: this.getPollResults(pollId) });
   }
 
   private getStepIndex(): number {
@@ -460,47 +333,21 @@ export class PresentationRoom {
 
   private getSliderValues(pollId: string): string[] {
     const rows = [...this.sql.exec(`SELECT value FROM slider_records WHERE poll_id = ?`, pollId)];
-    return rows.map(r => r.value as string);
+    return rows.map((r) => r.value as string);
   }
 
   private buildAllPollResults(): Record<string, Record<string, number>> {
-    const pollIds = [...this.sql.exec(`SELECT DISTINCT poll_id FROM votes`)].map(r => r.poll_id as string);
+    const pollIds = [...this.sql.exec(`SELECT DISTINCT poll_id FROM votes`)].map((r) => r.poll_id as string);
     const out: Record<string, Record<string, number>> = {};
     for (const pid of pollIds) out[pid] = this.getPollResults(pid);
     return out;
   }
 
   private buildAllPollValues(): Record<string, string[]> {
-    const pollIds = [...this.sql.exec(`SELECT DISTINCT poll_id FROM slider_records`)].map(r => r.poll_id as string);
+    const pollIds = [...this.sql.exec(`SELECT DISTINCT poll_id FROM slider_records`)].map((r) => r.poll_id as string);
     const out: Record<string, string[]> = {};
     for (const pid of pollIds) out[pid] = this.getSliderValues(pid);
     return out;
-  }
-
-  private buildCanvasState(): { canvas: (string | null)[][]; progress: number; players: Record<string, { id: string; name: string; color: string }> } {
-    const canvas: (string | null)[][] = Array.from({ length: GRID_SIZE }, () =>
-      Array<string | null>(GRID_SIZE).fill(null)
-    );
-
-    const cellRows = [...this.sql.exec(`SELECT x, y, color FROM canvas_cells`)];
-    let filledCount = 0;
-    for (const row of cellRows) {
-      const x = row.x as number, y = row.y as number;
-      canvas[y][x] = row.color as string;
-      if (TARGET[y][x]) filledCount++;
-    }
-
-    const playerRows = [...this.sql.exec(`SELECT id, name, color FROM players`)];
-    const players: Record<string, { id: string; name: string; color: string }> = {};
-    for (const row of playerRows) {
-      players[row.id as string] = { id: row.id as string, name: row.name as string, color: row.color as string };
-    }
-
-    return {
-      canvas,
-      progress: TARGET_CELL_COUNT > 0 ? Math.round((filledCount / TARGET_CELL_COUNT) * 100) : 0,
-      players,
-    };
   }
 
   private colorForKey(key: string): string {
@@ -514,7 +361,7 @@ export class PresentationRoom {
     const users: ConnectedUser[] = [];
     for (const ws of this.ctx.getWebSockets()) {
       if (ws === exclude) continue;
-      const att = ws.deserializeAttachment() as Attachment;
+      const att = ws.deserializeAttachment() as RoomAttachment;
       const key = att.email || att.name;
       if (seen.has(key)) continue;
       seen.add(key);

@@ -8,15 +8,16 @@ interface Props {
   state: WsState;
   send: (msg: Record<string, unknown> & { type: string }) => void;
   myName: string;
+  myOwner: string;
   onToggleDevRole?: () => void;
 }
 
-export function ParticipantApp({ state, send, myName, onToggleDevRole }: Props) {
+export function ParticipantApp({ state, send, myName, myOwner, onToggleDevRole }: Props) {
   const step = presentationSteps[state.stepIndex] ?? presentationSteps[0];
   const { muted, toggleMute } = useSoundContext();
   return (
     <div className="w-screen h-screen bg-slate-950 overflow-hidden relative">
-      <StageRenderer wsState={state} send={send} isPresenter={false} myName={myName} />
+      <StageRenderer wsState={state} send={send} isPresenter={false} myName={myName} myOwner={myOwner} />
       <div className="absolute top-3 right-4 flex items-center gap-2 z-50">
         {stepHasSound(step) && (
           <button

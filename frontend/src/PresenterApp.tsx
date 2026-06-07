@@ -9,11 +9,12 @@ interface Props {
   state: WsState;
   send: (msg: Record<string, unknown> & { type: string }) => void;
   myName: string;
+  myOwner: string;
   token: string | null;
   onToggleDevRole?: () => void;
 }
 
-export function PresenterApp({ state, send, myName, token, onToggleDevRole }: Props) {
+export function PresenterApp({ state, send, myName, myOwner, token, onToggleDevRole }: Props) {
   const step = presentationSteps[state.stepIndex] ?? presentationSteps[0];
   const isGame = step.type === 'game';
   const { muted, toggleMute } = useSoundContext();
@@ -78,7 +79,7 @@ export function PresenterApp({ state, send, myName, token, onToggleDevRole }: Pr
     <div className="w-screen h-screen bg-slate-950 overflow-hidden relative flex flex-col">
       {/* Main stage */}
       <div className="flex-1 overflow-hidden relative">
-        <StageRenderer wsState={state} send={send} isPresenter myName={myName} />
+        <StageRenderer wsState={state} send={send} isPresenter myName={myName} myOwner={myOwner} />
         {/* Name badge + optional sound toggle */}
         <div className="absolute top-3 right-4 flex items-center gap-2 z-50">
           {stepHasSound(step) && (

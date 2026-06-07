@@ -2,13 +2,24 @@
 # Local dev setup: starts wrangler + frontend, auths, opens presenter view.
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=scripts/lib/dev-vars.sh
+source "$SCRIPT_DIR/scripts/lib/dev-vars.sh"
+
 EMAIL="${1:-}"
 if [ -z "$EMAIL" ]; then
   read -rp "Enter your email address: " EMAIL
 fi
 [ -z "$EMAIL" ] && { echo "Error: email cannot be empty." >&2; exit 1; }
-printf '%s' "$EMAIL" | grep -qE '@(drugbank\.com|twosmiles\.ca)$' \
-  || { echo "Error: email must end in @drugbank.com or @twosmiles.ca." >&2; exit 1; }
+ALLOWED_DOMAINS="$(read_dev_var ALLOWED_EMAIL_DOMAINS)"
+if [ -z "$ALLOWED_DOMAINS" ]; then
+  echo "Error: ALLOWED_EMAIL_DOMAINS not set. Add it to server/.dev.vars (see server/.dev.vars.example)." >&2
+  exit 1
+fi
+if ! validate_email_domain "$EMAIL" "$ALLOWED_DOMAINS"; then
+  echo "Error: email must use an allowed domain ($ALLOWED_DOMAINS)." >&2
+  exit 1
+fi
 
 WORKER_URL="http://localhost:8787"
 

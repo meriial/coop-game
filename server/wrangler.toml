@@ -2,6 +2,12 @@ name = "workshop-game"
 main = "src/index.ts"
 compatibility_date = "2024-12-01"
 
+# Secrets and environment-specific values (ADMIN_EMAIL, JWT_SECRET, ALLOWED_EMAIL_DOMAINS) belong in:
+#   Local:  server/.dev.vars  (copy from .dev.vars.example; gitignored)
+#   Prod:   wrangler secret put ADMIN_EMAIL
+#           wrangler secret put JWT_SECRET
+#           wrangler secret put ALLOWED_EMAIL_DOMAINS
+
 [assets]
 directory = "../frontend/dist"
 

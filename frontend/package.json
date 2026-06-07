@@ -9,6 +9,10 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@workshop/game-core": "file:../packages/game-core",
+    "@workshop/game-periodic-match": "file:../packages/games/periodic-match",
+    "@workshop/game-pixel-heart": "file:../packages/games/pixel-heart",
+    "@workshop/protocol": "file:../packages/protocol",
     "lucide-react": "^1.17.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"

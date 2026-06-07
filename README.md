@@ -1,10 +1,12 @@
 # Workshop Pixel Art
 
-An interactive presentation platform and cooperative real-time game for AI workshops. The presenter drives a slide deck with live polls; everyone plays a cooperative pixel art game together to fill a heart-shaped canvas.
+An interactive presentation platform for AI workshops. The presenter drives a slide deck with live polls; participants play real-time games together (periodic-table matching and cooperative pixel-heart painting). AI agents can join via an MCP bridge.
+
+**Docs:** [architecture](docs/architecture.md) · [games](docs/game.md) · **[local verification](docs/verification.md)**
 
 ---
 
-## Setup (DrugBank / twosmiles.ca participants)
+## Setup (allowed-domain participants)
 
 Run this single command in your terminal — it handles everything:
 
@@ -12,11 +14,11 @@ Run this single command in your terminal — it handles everything:
 bash <(curl -fsSL https://raw.githubusercontent.com/meriial/coop-game/main/setup.sh)
 ```
 
-You'll be prompted for your `@drugbank.com` or `@twosmiles.ca` email. A magic link will arrive in your inbox — click it to authenticate, and your browser will open the presentation automatically.
+You'll be prompted for an email on an allowed domain (`ALLOWED_EMAIL_DOMAINS` on the deployed worker). A magic link will arrive in your inbox — click it to authenticate, and your browser will open the presentation automatically.
 
 **What you see depends on who you are:**
 - **Participants** — slides sync in real-time, vote in polls, paint the pixel heart
-- **Organizer** (`music@twosmiles.ca`) — same view, plus a presenter control bar to advance slides, trigger polls, reset the canvas, and invite guests
+- **Organizer** (email set via `ADMIN_EMAIL`) — same view, plus a presenter control bar to advance slides, trigger polls, reset the canvas, and invite guests
 
 **Requirements:** Node.js 18+, git, curl &nbsp;·&nbsp; pnpm is installed automatically if missing
 
@@ -30,9 +32,50 @@ The invite link is a signed JWT valid for 7 days.
 
 ---
 
+## Local verification
+
+See **[docs/verification.md](docs/verification.md)** for full instructions (servers, auth, browser checks, MCP).
+
+Quick start:
+
+```bash
+./dev.sh you@your-allowed-domain.example   # starts Worker + frontend, opens presenter
+node scripts/verify-presentation-e2e.mjs # presenter + participant E2E (Worker must be running)
+cd server && npm test                    # 21 automated WebSocket tests (no servers needed)
+```
+
+## MCP agents
+
+Build and run the stdio MCP server so an LLM agent can play as `"Owner's Agent 1"`:
+
+```bash
+cd packages/mcp-server && npm run build
+WORKSHOP_OWNER_TOKEN=<jwt> WORKSHOP_AGENT_LABEL="Agent 1" node dist/index.js
+```
+
+Tools: `get_state`, `wait_for_update`, `take_action`. Details in [docs/architecture.md § MCP bridge](docs/architecture.md#mcp-bridge).
+
 ## SDK reference
 
-The `@workshop/sdk` package exposes a single `GameClient` class.
+### Presentation room (`PresentationClient`)
+
+For the workshop presentation at `/room/{roomId}`:
+
+```typescript
+import { PresentationClient, buildRoomWsUrl } from '@workshop/sdk';
+
+const client = new PresentationClient(
+  buildRoomWsUrl('ws://localhost:8787', 'main', token),
+  'Alice',
+);
+await client.connect();
+client.sendAction({ type: 'GAME_PAINT', x: 3, y: 2 });
+const snap = await client.waitForUpdate();
+```
+
+### Legacy game room (`GameClient`)
+
+The `@workshop/sdk` package also exposes `GameClient` for the original `/ws` endpoint:
 
 ```typescript
 import { GameClient } from '@workshop/sdk';
@@ -106,6 +149,8 @@ pnpm exec wrangler kv namespace create AUTH_KV --preview
 pnpm exec wrangler secret put RESEND_API_KEY   # your Resend API key
 pnpm exec wrangler secret put FROM_EMAIL       # e.g. info@yourdomain.com
 pnpm exec wrangler secret put JWT_SECRET       # run: openssl rand -hex 32
+pnpm exec wrangler secret put ADMIN_EMAIL      # presenter email (must be on an allowed domain)
+pnpm exec wrangler secret put ALLOWED_EMAIL_DOMAINS  # comma-separated, e.g. your-domain.example,other.example
 
 # 4. Update the default WORKER_URL in setup.sh to match your worker subdomain
 
@@ -116,16 +161,17 @@ pnpm exec wrangler deploy
 ### Local development
 
 ```bash
-# server/.dev.vars is already set up with a local JWT_SECRET and ADMIN_EMAIL.
+# Copy server/.dev.vars.example → server/.dev.vars and set JWT_SECRET, ADMIN_EMAIL, ALLOWED_EMAIL_DOMAINS.
 # No RESEND_API_KEY → magic links and invite emails are stored in KV instead of sent.
 
+cp server/.dev.vars.example server/.dev.vars   # first time only
 cd server && pnpm dev        # worker on http://localhost:8787
 ```
 
 Then in a second terminal, run setup pointed at localhost — the magic link prints directly in the terminal:
 
 ```bash
-WORKER_URL=http://localhost:8787 bash <(curl -fsSL https://raw.githubusercontent.com/meriial/coop-game/main/setup.sh) music@twosmiles.ca
+WORKER_URL=http://localhost:8787 bash <(curl -fsSL https://raw.githubusercontent.com/meriial/coop-game/main/setup.sh) you@your-allowed-domain.example
 ```
 
 This authenticates you, writes your token to `frontend/.env`, and opens `http://localhost:5174` as the presenter. Open a second browser window at `http://localhost:5174` (in a private/incognito window with no token) to see the participant view.

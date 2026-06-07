@@ -5,9 +5,13 @@
 # optionally keeps wrangler running so you can open the app in a browser.
 set -euo pipefail
 
-TEST_EMAIL="${1:-music+testuser@twosmiles.ca}"
 REPO_ROOT="$(git -C "$(cd "$(dirname "$0")" && pwd)" rev-parse --show-toplevel)"
-WORK_DIR="$(mktemp -d)/drugbank"
+# shellcheck source=scripts/lib/dev-vars.sh
+source "$REPO_ROOT/scripts/lib/dev-vars.sh"
+
+TEST_EMAIL_DOMAIN="${TEST_EMAIL_DOMAIN:-example.test}"
+TEST_EMAIL="${1:-${TEST_EMAIL:-testuser+local@${TEST_EMAIL_DOMAIN}}}"
+WORK_DIR="$(mktemp -d)/workshop"
 WORKER_PORT=8789
 WRANGLER_PID=""
 
@@ -37,7 +41,15 @@ rsync -a \
   --exclude='.wrangler' \
   --exclude='.env' \
   --exclude='.env.local' \
+  --exclude='server/.dev.vars' \
   "$REPO_ROOT/" "$WORK_DIR/"
+
+# Seed isolated worker secrets for the test domain (no real organizer config).
+cat > "$WORK_DIR/server/.dev.vars" <<EOF
+ALLOWED_EMAIL_DOMAINS=${TEST_EMAIL_DOMAIN}
+JWT_SECRET=test-jwt-secret-local-e2e
+ADMIN_EMAIL=admin@${TEST_EMAIL_DOMAIN}
+EOF
 # Seed a minimal .env so the starter app has the game URL pointing to our test worker
 mkdir -p "$WORK_DIR/examples/starter"
 printf 'VITE_GAME_URL=ws://localhost:%s/ws\n' "$WORKER_PORT" > "$WORK_DIR/examples/starter/.env"

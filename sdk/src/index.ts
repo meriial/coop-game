@@ -1,2 +1,4 @@
 export { GameClient } from './client';
-export type { GameState, Player, ClientMsg, ServerMsg } from './types';
+export { PresentationClient, buildRoomWsUrl } from './presentation-client';
+export type { PresentationSnapshot, AgentIdentity } from './presentation-client';
+export type * from './types';

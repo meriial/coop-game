@@ -9,6 +9,7 @@ interface Env {
   FROM_EMAIL?: string;
   JWT_SECRET: string;
   ADMIN_EMAIL: string;
+  ALLOWED_EMAIL_DOMAINS?: string;
 }
 
 const CORS = {
@@ -66,25 +67,44 @@ function makeAdapter(env: Env): EmailAdapter {
 
 // --- Pure Helpers ---
 
-function isAllowedDomain(email: string): boolean {
-  const domain = email.split('@')[1];
-  return domain === 'drugbank.com' || domain === 'twosmiles.ca';
+function parseAllowedDomains(raw: string | undefined): string[] {
+  return (raw ?? '')
+    .split(',')
+    .map((d) => d.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function isAllowedDomain(email: string, env: Env): boolean {
+  const domain = email.split('@')[1]?.toLowerCase();
+  return domain ? parseAllowedDomains(env.ALLOWED_EMAIL_DOMAINS).includes(domain) : false;
+}
+
+function titleCase(word: string): string {
+  return word ? word[0].toUpperCase() + word.slice(1).toLowerCase() : word;
 }
 
 function parseName(email: string): string {
-  const [local, domain] = email.split('@');
-  if (domain === 'drugbank.com') {
-    const [first, last] = local.split('.');
-    if (!first) return email;
-    const firstName = first[0].toUpperCase() + first.slice(1).toLowerCase();
-    const lastInitial = last ? last[0].toUpperCase() : '';
-    return lastInitial ? `${firstName} ${lastInitial}` : firstName;
-  }
-  // twosmiles.ca: music+name@twosmiles.ca → name; no plus → Admin
+  const [local] = email.split('@');
+  if (!local) return email;
+
   const plusIdx = local.indexOf('+');
-  if (plusIdx === -1 || !local.slice(plusIdx + 1)) return 'Admin';
-  const tag = local.slice(plusIdx + 1);
-  return tag[0].toUpperCase() + tag.slice(1).toLowerCase();
+  if (plusIdx !== -1) {
+    const tag = local.slice(plusIdx + 1);
+    if (tag) return titleCase(tag);
+  }
+
+  const dotIdx = local.indexOf('.');
+  if (dotIdx !== -1) {
+    const [first, last] = local.split('.');
+    if (first) {
+      const firstName = titleCase(first);
+      const lastInitial = last ? last[0].toUpperCase() : '';
+      return lastInitial ? `${firstName} ${lastInitial}` : firstName;
+    }
+  }
+
+  const base = plusIdx !== -1 ? local.slice(0, plusIdx) : local;
+  return titleCase(base) || email;
 }
 
 function bytesToB64url(bytes: Uint8Array): string {
@@ -176,6 +196,17 @@ const successHtml = `<!DOCTYPE html>
 
 // --- Route Handlers ---
 
+function handleAuthConfig(env: Env): Response {
+  const domains = parseAllowedDomains(env.ALLOWED_EMAIL_DOMAINS);
+  if (domains.length === 0) {
+    return Response.json(
+      { error: 'Server misconfigured: ALLOWED_EMAIL_DOMAINS is not set' },
+      { status: 500, headers: CORS },
+    );
+  }
+  return Response.json({ allowed_email_domains: domains }, { headers: CORS });
+}
+
 async function handleAuthRequest(request: Request, env: Env): Promise<Response> {
   let email: string;
   try {
@@ -188,7 +219,13 @@ async function handleAuthRequest(request: Request, env: Env): Promise<Response> 
   if (!email) {
     return Response.json({ error: 'email is required' }, { status: 400, headers: CORS });
   }
-  if (!isAllowedDomain(email)) {
+  if (parseAllowedDomains(env.ALLOWED_EMAIL_DOMAINS).length === 0) {
+    return Response.json(
+      { error: 'Server misconfigured: ALLOWED_EMAIL_DOMAINS is not set' },
+      { status: 500, headers: CORS },
+    );
+  }
+  if (!isAllowedDomain(email, env)) {
     return Response.json({ error: 'Email domain not permitted' }, { status: 403, headers: CORS });
   }
 
@@ -374,6 +411,7 @@ export default {
       return env.PRESENTATION_ROOM.get(id).fetch(newReq);
     }
 
+    if (pathname === '/auth/config' && method === 'GET') return handleAuthConfig(env);
     if (pathname === '/auth/request' && method === 'POST') return handleAuthRequest(request, env);
     if (pathname === '/auth/poll' && method === 'GET') return handleAuthPoll(request, env);
     if (pathname === '/auth/verify' && method === 'GET') return handleAuthVerify(request, env);

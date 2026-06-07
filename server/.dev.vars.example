@@ -1,0 +1,6 @@
+# Copy to .dev.vars (gitignored) and set your values.
+# wrangler dev loads .dev.vars automatically.
+
+JWT_SECRET=replace-with-local-secret
+ADMIN_EMAIL=you@your-allowed-domain.example
+ALLOWED_EMAIL_DOMAINS=your-allowed-domain.example

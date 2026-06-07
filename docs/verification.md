@@ -1,0 +1,354 @@
+# Local verification guide
+
+Step-by-step instructions to verify the workshop platform locally. Intended for humans and agents — follow in order; each section states prerequisites, commands, and expected outcomes.
+
+## Prerequisites
+
+| Requirement | Notes |
+|---|---|
+| Node.js 18+ | Node 22 recommended (see `.tool-versions`) |
+| `curl` | Used for health checks and auth |
+| Repo dependencies | `npm install` in `server/` and `frontend/` (or `pnpm install` at root if available) |
+
+Local secrets live in [`server/.dev.vars`](../server/.dev.vars) (gitignored). Copy from [`server/.dev.vars.example`](../server/.dev.vars.example):
+
+```bash
+cp server/.dev.vars.example server/.dev.vars
+# edit ADMIN_EMAIL, JWT_SECRET, and ALLOWED_EMAIL_DOMAINS
+```
+
+| Variable | Where | Purpose |
+|---|---|---|
+| `JWT_SECRET` | `.dev.vars` / `wrangler secret` | Signs session JWTs |
+| `ADMIN_EMAIL` | `.dev.vars` / `wrangler secret` | Email that gets **presenter** role |
+| `ALLOWED_EMAIL_DOMAINS` | `.dev.vars` / `wrangler secret` | Comma-separated hostnames for magic-link auth (e.g. `your-domain.example,other.example`) |
+
+Magic-link auth only accepts emails on `ALLOWED_EMAIL_DOMAINS`. If unset, `/auth/request` returns 500 (fail fast) — set it in `.dev.vars` / `wrangler secret`. Vitest uses `admin@test.com` with a test secret (tests mint JWTs directly) — not the magic-link flow.
+
+**Public config endpoint:** `GET /auth/config` returns `{ "allowed_email_domains": ["..."] }` (no secrets). [`setup.sh`](../setup.sh) calls this before `POST /auth/request` to validate the participant email against the worker's env vars — participants do not need any local `ALLOWED_EMAIL_DOMAINS` export.
+
+Production:
+
+```bash
+cd server && pnpm exec wrangler secret put JWT_SECRET
+cd server && pnpm exec wrangler secret put ADMIN_EMAIL
+cd server && pnpm exec wrangler secret put ALLOWED_EMAIL_DOMAINS
+```
+
+Without `RESEND_API_KEY`, magic links are **not emailed** — they appear in the terminal or at `GET /auth/inbox`.
+
+---
+
+## 1. Full presentation E2E (presenter + participant, recommended)
+
+With the Worker running (`cd server && npm run dev`), authenticates **two real users** via magic link and exercises both games, slide navigation, and polls over WebSocket:
+
+```bash
+# Terminal 1
+cd server && npm run dev
+
+# Terminal 2 (optional, for browser UI)
+cd frontend && npm run dev
+
+# Terminal 3
+node scripts/verify-presentation-e2e.mjs
+```
+
+Uses a **fresh room id** each run (`verify-<timestamp>`) so leftover step state from earlier sessions does not affect results.
+
+| User | Email | Role |
+|---|---|---|
+| Presenter | `$ADMIN_EMAIL` from `server/.dev.vars` | Must match worker `ADMIN_EMAIL` |
+| Participant | `alice@<first-allowed-domain>` (default) | Any allowed-domain participant |
+
+Override with env vars: `PRESENTER_EMAIL`, `ADMIN_EMAIL`, `PARTICIPANT_EMAIL`, `ALLOWED_EMAIL_DOMAINS`, `WORKER_URL`, `FRONTEND_URL`, `ROOM_ID`.
+
+**Expected:** `✅ All presentation + game checks passed.` (19 checks)
+
+**Browser follow-up** (optional): open the printed frontend URLs with each JWT:
+
+```
+http://localhost:5174/?token=<presenter-jwt>
+http://localhost:5174/?token=<participant-jwt>   # incognito / second browser
+```
+
+Obtain JWTs via section 4 below, or run:
+
+```bash
+# Presenter token (use your ADMIN_EMAIL from server/.dev.vars)
+curl -s -X POST http://localhost:8787/auth/request \
+  -H 'Content-Type: application/json' \
+  -d "{\"email\":\"$ADMIN_EMAIL\"}" | tee /tmp/auth.json
+curl -s "$(jq -r .magic_link /tmp/auth.json)" > /dev/null
+curl -s "http://localhost:8787/auth/poll?code=$(jq -r .device_code /tmp/auth.json)" | jq -r .agentToken
+```
+
+---
+
+## 2. Automated unit tests (no servers, fastest)
+
+Runs WebSocket BDD tests against the real Worker + `PresentationRoom` Durable Object in Vitest. No browser or JWT setup required.
+
+```bash
+cd server && npm install && npm test
+cd ../packages/mcp-server && npm install && npm test
+```
+
+**Expected:**
+
+```
+Test Files  5 passed (5)
+Tests       21 passed (21)
+```
+
+Covers: `WELCOME`, periodic-match flips/alarms, pixel-heart paint, polls, `CONNECTED_USERS`, agent auth caps.
+
+From repo root (runs both suites):
+
+```bash
+npm test
+```
+
+---
+
+## 3. Full local stack (one command)
+
+[`dev.sh`](../dev.sh) installs deps, starts the Worker (`:8787`), runs the magic-link auth flow, writes `frontend/.env`, starts the frontend (`:5174`), and opens the presenter URL.
+
+```bash
+./dev.sh you@your-allowed-domain.example
+```
+
+Or interactively (prompts for email):
+
+```bash
+./dev.sh
+```
+
+**What happens:**
+
+1. Wrangler dev starts → `http://localhost:8787`
+2. `POST /auth/request` with your email → magic link printed in terminal (no email server locally)
+3. Open the link → `GET /auth/verify` approves the device
+4. Script polls `GET /auth/poll` → receives `agentToken` (JWT)
+5. Writes `frontend/.env`:
+   ```
+   VITE_SERVER_URL=http://localhost:8787
+   VITE_WS_URL=ws://localhost:8787
+   VITE_AGENT_TOKEN=<jwt>
+   ```
+6. Frontend starts → `http://localhost:5174/?token=<jwt>`
+
+**Expected terminal output:** `✓ Wrangler ready`, `✅ Authenticated!`, presenter URL printed.
+
+**Stop:** Ctrl+C (stops both servers).
+
+### Presenter vs participant locally
+
+| Role | How |
+|---|---|
+| **Presenter** | Email must equal `ADMIN_EMAIL` in `server/.dev.vars`, **or** use dev role override (below) |
+| **Participant** | Any other email on `ALLOWED_EMAIL_DOMAINS`, or guest invite link |
+
+**Dev role override** (localhost only): append `&devRole=presenter` or `&devRole=participant` to the WebSocket URL. The frontend dev UI also has a toggle (amber presentation icon, top-right) to switch views without re-authenticating.
+
+To test as presenter with `dev.sh` and a non-admin email:
+
+```
+http://localhost:5174/?token=<jwt>
+```
+
+Then click the dev **presenter/participant toggle** in the top-right, or restart with `devRole` in the WS URL (the toggle updates `devRole` automatically in dev mode).
+
+---
+
+## 4. Manual server startup (two terminals)
+
+Use when you need fine-grained control or are verifying without `dev.sh`.
+
+### Terminal 1 — Worker
+
+```bash
+cd server
+npm install
+npm run dev
+# → http://localhost:8787
+```
+
+Verify:
+
+```bash
+curl -s http://localhost:8787/ | jq .
+# → { "status": "ok", "game": "Workshop Pixel Art", "ws": "/ws" }
+```
+
+### Terminal 2 — Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+# → http://localhost:5174
+```
+
+The frontend **requires a JWT** in the URL (`?token=…`) or in `VITE_AGENT_TOKEN` inside `frontend/.env`. Without it you see "Authentication required".
+
+---
+
+## 5. Obtaining a JWT locally
+
+### Option A — Magic-link flow (mirrors production)
+
+```bash
+# 1. Request a device code
+curl -s -X POST http://localhost:8787/auth/request \
+  -H 'Content-Type: application/json' \
+  -d "{\"email\":\"$ADMIN_EMAIL\"}" | jq .
+
+# Response includes "magic_link" (local only) and "device_code"
+
+# 2. Open magic_link in a browser (or curl it)
+curl -s '<magic_link_from_step_1>'
+# → HTML page with "Authenticated!"
+
+# 3. Poll for the token
+curl -s 'http://localhost:8787/auth/poll?code=<device_code>' | jq .
+# → { "status": "approved", "email": "...", "name": "...", "agentToken": "<jwt>" }
+```
+
+Save `agentToken` as your JWT.
+
+### Option B — Read from `frontend/.env` after `dev.sh`
+
+```bash
+grep VITE_AGENT_TOKEN frontend/.env
+```
+
+### Option C — Guest invite (presenter only)
+
+1. Open presenter UI with an admin JWT (`admin@test.com` or `devRole=presenter`).
+2. Click **+ Invite**, enter guest name + email, send.
+3. Without Resend, the invite link appears in the modal — open in incognito.
+
+### Presenter JWT shortcut
+
+Use your `ADMIN_EMAIL` in the auth flow — that email receives presenter role automatically.
+
+---
+
+## 6. Browser verification checklist
+
+With Worker + frontend running and a JWT in hand:
+
+| Step | Action | Expected |
+|---|---|---|
+| 1 | Open `http://localhost:5174/?token=<jwt>` | Slide deck loads; WebSocket connects |
+| 2 | Default step (index 0) | **periodic-match** game visible |
+| 3 | Presenter: advance slides (←/→ or control bar) | All tabs sync via `SYNC_STEP` |
+| 4 | Advance to pixel-heart step (index 7) | Heart canvas; click target cells to paint |
+| 5 | Poll steps | Vote; results update live |
+| 6 | Two tabs (dev toggle or two JWTs) | Moves in one tab appear in the other |
+
+### WebSocket URL (for debugging)
+
+The frontend connects to:
+
+```
+ws://localhost:8787/room/main?token=<jwt>
+```
+
+With dev role override:
+
+```
+ws://localhost:8787/room/main?token=<jwt>&devRole=presenter
+```
+
+---
+
+## 7. MCP agent verification
+
+Requires a running Worker (section 2 or 3) and an owner JWT (section 4).
+
+```bash
+# Build MCP server
+cd packages/mcp-server
+npm install && npm run build
+
+# Run (stdio — typically registered in an MCP client config)
+export WORKSHOP_OWNER_TOKEN='<jwt from section 4>'
+export WORKSHOP_AGENT_LABEL='Agent 1'
+export WORKSHOP_ROOM_URL='http://localhost:8787'
+export WORKSHOP_ROOM_ID='main'
+node dist/index.js
+```
+
+**Tool smoke test** (via MCP client or integration test):
+
+| Tool | Expected |
+|---|---|
+| `get_state` | JSON with `activeGameId`, game state, `identity.name` = `"<Owner>'s Agent 1"` |
+| `take_action` | Send e.g. `{ "type": "MATCH_FLIP", "payload": { "pos": 0 } }` on periodic-match step; state updates in browser |
+| `wait_for_update` | Returns after another player moves or times out ~25s when idle |
+
+**Agent cap test** (periodic-match, step 0): connect a second agent with the same owner token + different `agentLabel` → WebSocket upgrade returns **403**.
+
+On pixel-heart (step 7): second agent for the same owner is **allowed**.
+
+---
+
+## 8. Build & deploy verification
+
+```bash
+cd frontend && npm run type-check && npm run build
+cd ../server && npx wrangler deploy --dry-run
+```
+
+**Expected:** no TypeScript errors; dry-run lists `PRESENTATION_ROOM` and `GAME_ROOM` bindings.
+
+Full deploy:
+
+```bash
+npm run deploy   # from repo root — builds frontend, deploys server
+```
+
+---
+
+## 9. Auth end-to-end script
+
+[`test-local.sh`](../test-local.sh) clones the repo to a temp directory, runs the full magic-link + inbox + JWT pipeline, and prints the decoded payload. Useful for CI-style auth verification:
+
+```bash
+./test-local.sh                    # default: testuser+local@example.test
+./test-local.sh custom@my.test     # positional override
+```
+
+**Expected:** `=== ✅ All auth checks passed ===`
+
+---
+
+## Quick reference
+
+| Goal | Command / URL |
+|---|---|
+| Full presenter+participant E2E | `node scripts/verify-presentation-e2e.mjs` |
+| Run all automated tests | `cd server && npm test` |
+| Start everything + auth | `./dev.sh you@your-allowed-domain.example` |
+| Worker only | `cd server && npm run dev` |
+| Frontend only | `cd frontend && npm run dev` |
+| Health check | `curl http://localhost:8787/` |
+| Local auth inbox | `curl http://localhost:8787/auth/inbox \| jq` |
+| Allowed email domains | `curl http://localhost:8787/auth/config \| jq` |
+| Presenter UI | `http://localhost:5174/?token=<jwt>` |
+| MCP server | `WORKSHOP_OWNER_TOKEN=<jwt> node packages/mcp-server/dist/index.js` |
+
+## Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| `Authentication required` in browser | Add `?token=<jwt>` or run `dev.sh` to populate `frontend/.env` |
+| Presenter controls missing | JWT email must match `ADMIN_EMAIL` in `.dev.vars`, or use dev `devRole=presenter` toggle |
+| `pnpm: command not found` | Use `npm` in `server/` and `frontend/` directly |
+| Tests hang on first run | Normal on cold start; re-run. Config uses `maxWorkers: 1` for WebSocket + DO |
+| Magic link missing | Check terminal output from `dev.sh`, or `curl localhost:8787/auth/inbox` |
+| Wrong slide on connect (not step 0) | The `main` room persists state — use `node scripts/verify-presentation-e2e.mjs` (fresh room), or presenter resets step |
+| `admin@test.com` magic-link auth fails | Domain not in `ALLOWED_EMAIL_DOMAINS` — use an allowed domain or mint JWTs in tests |

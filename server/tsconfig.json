@@ -5,8 +5,8 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "strict": true,
-    "types": ["@cloudflare/workers-types"],
+    "types": [],
     "noEmit": true
   },
-  "include": ["src"]
+  "include": ["src", "test", "worker-configuration.d.ts"]
 }

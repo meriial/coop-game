@@ -1,13 +1,13 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
-import type { WsState } from '../../hooks/useWebSocket';
-import { useSoundContext } from '../../contexts/SoundContext';
+import type { GameComponentProps } from '@workshop/game-core/client';
+import type { PeriodicMatchState } from './types';
+import { useSoundContext } from '@frontend/contexts/SoundContext';
 
 const MIN_ELEMENTS = 5;
 const MAX_ELEMENTS = 118;
 const GAP = 3;
 
 function bestCols(W: number, H: number, N: number): number {
-  // Find the fewest columns (= largest square tiles) where all rows fit within H
   for (let c = 1; c <= N; c++) {
     const tileW = (W - (c - 1) * GAP) / c;
     const rows = Math.ceil(N / c);
@@ -17,17 +17,24 @@ function bestCols(W: number, H: number, N: number): number {
   return N;
 }
 
-interface Props {
-  wsState: WsState;
-  send: (msg: Record<string, unknown> & { type: string }) => void;
-  isHost: boolean;
-  myName: string;
-}
+export function PeriodicMatch({
+  state,
+  send,
+  isHost,
+  myName,
+  connectedUsers,
+}: GameComponentProps<PeriodicMatchState>) {
+  const {
+    matchBoard,
+    matchClaimed,
+    matchPending,
+    matchRevealed,
+    matchPaused,
+    matchScores,
+    gameOver: matchGameOver,
+    matchElementCount,
+  } = state;
 
-export function PeriodicMatch({ wsState, send, isHost, myName }: Props) {
-  const { matchBoard, matchClaimed, matchPending, matchRevealed, matchPaused, matchScores, matchGameOver, matchElementCount } = wsState;
-
-  // Grid sizing
   const gridRef = useRef<HTMLDivElement>(null);
   const nRef = useRef(matchBoard.length);
   nRef.current = matchBoard.length;
@@ -43,12 +50,10 @@ export function PeriodicMatch({ wsState, send, isHost, myName }: Props) {
     setGridState({ cols: c, tileSize: s });
   }, []);
 
-  // Recompute when tile count changes
   useEffect(() => {
     recomputeGrid();
   }, [matchBoard.length, recomputeGrid]);
 
-  // Observe container resize
   useEffect(() => {
     const el = gridRef.current;
     if (!el) return;
@@ -57,10 +62,8 @@ export function PeriodicMatch({ wsState, send, isHost, myName }: Props) {
     return () => obs.disconnect();
   }, [recomputeGrid]);
 
-  // Sound effects (shared context so volume toggle works from outside the component)
   const { playBleep, playBoop, playBing, playDoorbell } = useSoundContext();
 
-  // Track previous match state to detect flip events
   const prevPendingRef = useRef(matchPending);
   const prevRevealedRef = useRef(matchRevealed);
   const prevClaimedRef = useRef(matchClaimed);
@@ -68,17 +71,12 @@ export function PeriodicMatch({ wsState, send, isHost, myName }: Props) {
     const prevPending = prevPendingRef.current;
     const prevRevealed = prevRevealedRef.current;
 
-    // New entry in matchPending = first flip → bleep
     for (const pos of Object.keys(matchPending)) {
       if (!(pos in prevPending)) { playBleep(); break; }
     }
-
-    // New entry in matchRevealed = mismatch result just arrived → boop
     for (const pos of Object.keys(matchRevealed)) {
       if (!(pos in prevRevealed)) { playBoop(); break; }
     }
-
-    // Entry disappeared from matchPending and is now claimed = match → bing
     for (const pos of Object.keys(prevPending)) {
       if (!(pos in matchPending) && !(pos in matchRevealed)) {
         const idx = parseInt(pos, 10);
@@ -92,16 +90,14 @@ export function PeriodicMatch({ wsState, send, isHost, myName }: Props) {
     prevClaimedRef.current = matchClaimed;
   }, [matchPending, matchRevealed, matchClaimed]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Doorbell for admin when a new user connects
-  const prevUserCountRef = useRef(wsState.connectedUsers.length);
+  const prevUserCountRef = useRef(connectedUsers.length);
   useEffect(() => {
     if (!isHost) return;
-    const curr = wsState.connectedUsers.length;
+    const curr = connectedUsers.length;
     if (curr > prevUserCountRef.current) playDoorbell();
     prevUserCountRef.current = curr;
-  }, [wsState.connectedUsers.length, isHost, playDoorbell]);
+  }, [connectedUsers.length, isHost, playDoorbell]);
 
-  // Element count input state
   const [inputVal, setInputVal] = useState(String(matchElementCount));
   useEffect(() => {
     setInputVal(String(matchElementCount));
@@ -128,14 +124,12 @@ export function PeriodicMatch({ wsState, send, isHost, myName }: Props) {
   };
 
   const totalPairs = matchBoard.length / 2;
-  const claimedPairs = matchClaimed.filter(c => c !== null).length / 2;
+  const claimedPairs = matchClaimed.filter((c) => c !== null).length / 2;
   const progressPct = totalPairs > 0 ? (claimedPairs / totalPairs) * 100 : 0;
 
   return (
     <div className="w-full h-full flex overflow-hidden bg-slate-950 relative">
-      {/* Grid area */}
       <div className="flex-1 flex flex-col gap-2 p-3 overflow-hidden min-w-0">
-        {/* Header */}
         <div className="flex items-center justify-between shrink-0 gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <h2 className="text-white text-lg font-bold shrink-0">Element Match</h2>
@@ -150,7 +144,6 @@ export function PeriodicMatch({ wsState, send, isHost, myName }: Props) {
           )}
         </div>
 
-        {/* Progress bar */}
         <div className="h-1 bg-slate-800 rounded-full overflow-hidden shrink-0">
           <div
             className="h-full bg-gradient-to-r from-cyan-500 to-emerald-500 rounded-full transition-all duration-300"
@@ -158,7 +151,6 @@ export function PeriodicMatch({ wsState, send, isHost, myName }: Props) {
           />
         </div>
 
-        {/* Tile grid — fills remaining space */}
         <div
           ref={gridRef}
           className="flex-1 overflow-hidden"
@@ -196,7 +188,6 @@ export function PeriodicMatch({ wsState, send, isHost, myName }: Props) {
         </div>
       </div>
 
-      {/* Leaderboard sidebar */}
       <div className="w-52 shrink-0 flex flex-col gap-3 p-3 border-l border-slate-800 bg-slate-900/50">
         <h3 className="text-slate-300 font-semibold text-xs uppercase tracking-wider shrink-0">
           Leaderboard
@@ -206,10 +197,7 @@ export function PeriodicMatch({ wsState, send, isHost, myName }: Props) {
             <p className="text-slate-600 text-xs">No players yet</p>
           ) : (
             matchScores.map((player, i) => (
-              <div
-                key={player.id}
-                className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-800/60"
-              >
+              <div key={player.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-800/60">
                 <span className="text-slate-600 text-xs w-3 shrink-0">{i + 1}</span>
                 <div className="w-2 h-2 rounded-full shrink-0" style={{ background: player.color }} />
                 <span className="text-slate-300 text-xs flex-1 truncate">{player.name}</span>
@@ -236,9 +224,9 @@ export function PeriodicMatch({ wsState, send, isHost, myName }: Props) {
                   min={MIN_ELEMENTS}
                   max={MAX_ELEMENTS}
                   value={inputVal}
-                  onChange={e => setInputVal(e.target.value)}
-                  onBlur={e => commitInput(e.target.value)}
-                  onKeyDown={e => {
+                  onChange={(e) => setInputVal(e.target.value)}
+                  onBlur={(e) => commitInput(e.target.value)}
+                  onKeyDown={(e) => {
                     if (e.key === 'Enter') commitInput((e.target as HTMLInputElement).value);
                   }}
                   className="flex-1 min-w-0 bg-slate-800 border border-slate-600 rounded-md text-center text-white text-sm font-mono font-bold focus:outline-none focus:border-indigo-500 focus:ring-1"
@@ -276,7 +264,6 @@ export function PeriodicMatch({ wsState, send, isHost, myName }: Props) {
         )}
       </div>
 
-      {/* Game-over overlay */}
       {matchGameOver && (
         <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center z-20">
           <div className="bg-slate-900 border border-slate-700 rounded-2xl p-8 max-w-sm w-full mx-4 text-center shadow-2xl">

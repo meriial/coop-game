@@ -9,7 +9,7 @@ export type PresentationStep =
   | { type: 'slide'; slideIndex: number }
   | { type: 'poll'; slideIndex: number; pollId: string }
   | { type: 'results'; slideIndex: number; pollIds: string[] }
-  | { type: 'game'; gameId: 'pixel-heart' | 'periodic-match' };
+  | { type: 'game'; gameId: string };
 
 export const POLL_QUESTIONS: Record<string, PollConfig> = {
   workshop_feel: {

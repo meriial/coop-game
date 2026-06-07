@@ -1,0 +1,21 @@
+{
+  "name": "@workshop/game-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./server": "./src/server/index.ts",
+    "./client": "./src/client/index.ts"
+  },
+  "dependencies": {
+    "@workshop/protocol": "file:../protocol"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.6",
+    "react": "^19.1.0",
+    "typescript": "^5.7.0"
+  }
+}

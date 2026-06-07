@@ -3,6 +3,8 @@ packages:
   - 'sdk'
   - 'frontend'
   - 'examples/*'
+  - 'packages/*'
+  - 'packages/games/*'
 
 allowBuilds:
   esbuild: true

@@ -1,0 +1,229 @@
+import type { CanvasState, InboundMsg, MatchState, OutboundMsg } from '@workshop/protocol';
+
+export interface AgentIdentity {
+  name: string;
+  ownerId: string;
+  isAgent: boolean;
+  agentLabel?: string;
+}
+
+export interface PresentationSnapshot {
+  stepIndex: number;
+  role: string;
+  activeGameId: string | null;
+  periodicMatch: MatchState;
+  pixelHeart: CanvasState;
+  identity: AgentIdentity;
+  version: number;
+}
+
+type SyncListener = (snapshot: PresentationSnapshot) => void;
+
+const PRESENTATION_STEPS: { type: string; gameId?: string }[] = [
+  { type: 'game', gameId: 'periodic-match' },
+  { type: 'slide' },
+  { type: 'slide' },
+  { type: 'poll' },
+  { type: 'poll' },
+  { type: 'poll' },
+  { type: 'results' },
+  { type: 'game', gameId: 'pixel-heart' },
+  { type: 'slide' },
+];
+
+function activeGameForStep(stepIndex: number): string | null {
+  const step = PRESENTATION_STEPS[stepIndex];
+  return step?.type === 'game' ? (step.gameId ?? null) : null;
+}
+
+export class PresentationClient {
+  private ws: WebSocket | null = null;
+  private version = 0;
+  private stepIndex = 0;
+  private role = 'participant';
+  private periodicMatch: MatchState = {
+    matchBoard: [],
+    matchClaimed: [],
+    matchPending: {},
+    matchRevealed: {},
+    matchPaused: false,
+    matchScores: [],
+    matchElementCount: 118,
+    gameOver: false,
+  };
+  private pixelHeart: CanvasState = {
+    canvas: Array.from({ length: 20 }, () => Array<string | null>(20).fill(null)),
+    progress: 0,
+    players: {},
+  };
+  private identity: AgentIdentity = { name: 'Guest', ownerId: '', isAgent: false };
+  private listeners: SyncListener[] = [];
+  private waiters: Array<{ minVersion: number; resolve: (s: PresentationSnapshot) => void; timer: ReturnType<typeof setTimeout> }> = [];
+
+  constructor(
+    private readonly wsUrl: string,
+    private readonly displayName: string,
+    private readonly agentMeta?: { ownerId: string; agentLabel: string },
+  ) {}
+
+  connect(): Promise<PresentationSnapshot> {
+    return new Promise((resolve, reject) => {
+      const ws = new WebSocket(this.wsUrl);
+      this.ws = ws;
+      let settled = false;
+      const settle = (fn: () => void) => {
+        if (!settled) {
+          settled = true;
+          fn();
+        }
+      };
+
+      ws.onmessage = (event) => {
+        let msg: OutboundMsg;
+        try {
+          msg = JSON.parse(event.data as string) as OutboundMsg;
+        } catch {
+          return;
+        }
+        this.applyMessage(msg);
+        if (msg.type === 'WELCOME') {
+          if (this.agentMeta) {
+            this.identity = {
+              name: this.displayName,
+              ownerId: this.agentMeta.ownerId,
+              isAgent: true,
+              agentLabel: this.agentMeta.agentLabel,
+            };
+          }
+          settle(() => resolve(this.snapshot()));
+        }
+      };
+
+      ws.onopen = () => {
+        ws.send(JSON.stringify({ type: 'GAME_JOIN', name: this.displayName } satisfies InboundMsg));
+      };
+
+      ws.onerror = () => settle(() => reject(new Error('WebSocket error')));
+      ws.onclose = () => settle(() => reject(new Error('Connection closed before WELCOME')));
+    });
+  }
+
+  onSync(cb: SyncListener): void {
+    this.listeners.push(cb);
+  }
+
+  getSnapshot(): PresentationSnapshot {
+    return this.snapshot();
+  }
+
+  sendAction(msg: InboundMsg | ({ type: string } & Record<string, unknown>)): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(msg));
+    }
+  }
+
+  waitForUpdate(minVersion = this.version, timeoutMs = 25_000): Promise<PresentationSnapshot> {
+    if (this.version > minVersion) return Promise.resolve(this.snapshot());
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        const idx = this.waiters.findIndex((w) => w.resolve === resolve);
+        if (idx >= 0) this.waiters.splice(idx, 1);
+        resolve(this.snapshot());
+      }, timeoutMs);
+      this.waiters.push({ minVersion, resolve, timer });
+    });
+  }
+
+  disconnect(): void {
+    this.ws?.close();
+    this.ws = null;
+  }
+
+  private snapshot(): PresentationSnapshot {
+    return {
+      stepIndex: this.stepIndex,
+      role: this.role,
+      activeGameId: activeGameForStep(this.stepIndex),
+      periodicMatch: this.structuredClone(this.periodicMatch),
+      pixelHeart: this.structuredClone(this.pixelHeart),
+      identity: { ...this.identity },
+      version: this.version,
+    };
+  }
+
+  private structuredClone<T>(value: T): T {
+    return JSON.parse(JSON.stringify(value)) as T;
+  }
+
+  private bump(): void {
+    this.version += 1;
+    const snap = this.snapshot();
+    for (const cb of this.listeners) cb(snap);
+    const ready = this.waiters.filter((w) => this.version > w.minVersion);
+    this.waiters = this.waiters.filter((w) => this.version <= w.minVersion);
+    for (const w of ready) {
+      clearTimeout(w.timer);
+      w.resolve(snap);
+    }
+  }
+
+  private applyMessage(msg: OutboundMsg): void {
+    switch (msg.type) {
+      case 'WELCOME':
+        this.stepIndex = msg.stepIndex;
+        this.role = msg.role;
+        this.periodicMatch = {
+          matchBoard: msg.matchBoard,
+          matchClaimed: msg.matchClaimed,
+          matchPending: msg.matchPending,
+          matchRevealed: msg.matchRevealed,
+          matchPaused: msg.matchPaused,
+          matchScores: msg.matchScores,
+          matchElementCount: msg.matchElementCount,
+          gameOver: msg.gameOver,
+        };
+        this.pixelHeart = {
+          canvas: msg.canvas,
+          progress: msg.progress,
+          players: msg.players,
+        };
+        this.bump();
+        break;
+      case 'SYNC_STEP':
+        this.stepIndex = msg.stepIndex;
+        this.bump();
+        break;
+      case 'SYNC_MATCH':
+        this.periodicMatch = {
+          matchBoard: msg.matchBoard,
+          matchClaimed: msg.matchClaimed,
+          matchPending: msg.matchPending,
+          matchRevealed: msg.matchRevealed,
+          matchPaused: msg.matchPaused,
+          matchScores: msg.matchScores,
+          matchElementCount: msg.matchElementCount,
+          gameOver: msg.gameOver,
+        };
+        this.bump();
+        break;
+      case 'SYNC_CANVAS':
+        this.pixelHeart = {
+          canvas: msg.canvas,
+          progress: msg.progress,
+          players: msg.players,
+        };
+        this.bump();
+        break;
+      default:
+        break;
+    }
+  }
+}
+
+export function buildRoomWsUrl(baseUrl: string, roomId: string, token: string, agentLabel?: string): string {
+  const wsBase = baseUrl.replace(/^http/, 'ws');
+  const url = new URL(`${wsBase}/room/${roomId}`);
+  url.searchParams.set('token', token);
+  if (agentLabel) url.searchParams.set('agentLabel', agentLabel);
+  return url.toString();
+}

@@ -8,6 +8,7 @@
     "dev:server": "pnpm --filter server dev",
     "dev:starter": "pnpm --filter starter dev",
     "dev:frontend": "pnpm --filter frontend dev",
-    "deploy": "pnpm --filter frontend build && pnpm --filter server deploy"
+    "deploy": "pnpm --filter frontend build && pnpm --filter server deploy",
+    "test": "npm run test --prefix server && npm run test --prefix packages/mcp-server"
   }
 }

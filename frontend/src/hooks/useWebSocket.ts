@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import type { MatchState, CanvasState } from '@workshop/protocol';
 
 export interface ConnectedUser { name: string; color?: string }
-
-export interface MatchScore { id: string; name: string; color: string; count: number }
 
 export interface WsState {
   stepIndex: number;
@@ -10,19 +9,9 @@ export interface WsState {
   pollResults: Record<string, Record<string, number>>;
   pollValues: Record<string, string[]>;
   pollResetSeq: Record<string, number>;
-  canvas: (string | null)[][];
-  progress: number;
-  players: Record<string, { id: string; name: string; color: string }>;
+  games: Record<string, unknown>;
   connectedUsers: ConnectedUser[];
   connected: boolean;
-  matchBoard: string[];
-  matchClaimed: (string | null)[];
-  matchPending: Record<string, string>;
-  matchRevealed: Record<string, string>;
-  matchPaused: boolean;
-  matchScores: MatchScore[];
-  matchGameOver: boolean;
-  matchElementCount: number;
 }
 
 const EMPTY_CANVAS: (string | null)[][] = Array.from({ length: 20 }, () => Array<string | null>(20).fill(null));
@@ -33,22 +22,45 @@ const DEFAULT_STATE: WsState = {
   pollResults: {},
   pollValues: {},
   pollResetSeq: {},
-  canvas: EMPTY_CANVAS,
-  progress: 0,
-  players: {},
+  games: {
+    'pixel-heart': { canvas: EMPTY_CANVAS, progress: 0, players: {} } satisfies CanvasState,
+    'periodic-match': {
+      matchBoard: [],
+      matchClaimed: [],
+      matchPending: {},
+      matchRevealed: {},
+      matchPaused: false,
+      matchScores: [],
+      matchElementCount: 118,
+      gameOver: false,
+    } satisfies MatchState,
+  },
   connectedUsers: [],
   connected: false,
-  matchBoard: [],
-  matchClaimed: [],
-  matchPending: {},
-  matchRevealed: {},
-  matchPaused: false,
-  matchScores: [],
-  matchGameOver: false,
-  matchElementCount: 118,
 };
 
 type OutgoingMsg = Record<string, unknown> & { type: string };
+
+function patchPeriodicMatch(msg: Record<string, unknown>): MatchState {
+  return {
+    matchBoard: (msg.matchBoard as string[]) ?? [],
+    matchClaimed: (msg.matchClaimed as (string | null)[]) ?? [],
+    matchPending: (msg.matchPending as Record<string, string>) ?? {},
+    matchRevealed: (msg.matchRevealed as Record<string, string>) ?? {},
+    matchPaused: (msg.matchPaused as boolean) ?? false,
+    matchScores: (msg.matchScores as MatchState['matchScores']) ?? [],
+    matchElementCount: (msg.matchElementCount as number) ?? 118,
+    gameOver: (msg.gameOver as boolean) ?? false,
+  };
+}
+
+function patchCanvas(msg: Record<string, unknown>): CanvasState {
+  return {
+    canvas: (msg.canvas as (string | null)[][]) ?? EMPTY_CANVAS,
+    progress: (msg.progress as number) ?? 0,
+    players: (msg.players as CanvasState['players']) ?? {},
+  };
+}
 
 export function useWebSocket(url: string, disabled = false) {
   const [state, setState] = useState<WsState>(DEFAULT_STATE);
@@ -70,7 +82,7 @@ export function useWebSocket(url: string, disabled = false) {
       let msg: Record<string, unknown>;
       try { msg = JSON.parse(event.data as string) as Record<string, unknown>; } catch { return; }
 
-      setState(prev => {
+      setState((prev) => {
         switch (msg.type) {
           case 'WELCOME':
             return {
@@ -80,17 +92,11 @@ export function useWebSocket(url: string, disabled = false) {
               role: (msg.role as 'presenter' | 'participant') ?? 'participant',
               pollResults: (msg.pollResults as Record<string, Record<string, number>>) ?? {},
               pollValues: (msg.pollValues as Record<string, string[]>) ?? {},
-              canvas: (msg.canvas as (string | null)[][]) ?? EMPTY_CANVAS,
-              progress: (msg.progress as number) ?? 0,
-              players: (msg.players as WsState['players']) ?? {},
-              matchBoard: (msg.matchBoard as string[]) ?? [],
-              matchClaimed: (msg.matchClaimed as (string | null)[]) ?? [],
-              matchPending: (msg.matchPending as Record<string, string>) ?? {},
-              matchRevealed: (msg.matchRevealed as Record<string, string>) ?? {},
-              matchPaused: (msg.matchPaused as boolean) ?? false,
-              matchScores: (msg.matchScores as MatchScore[]) ?? [],
-              matchGameOver: (msg.gameOver as boolean) ?? false,
-              matchElementCount: (msg.matchElementCount as number) ?? 118,
+              games: {
+                ...prev.games,
+                'periodic-match': patchPeriodicMatch(msg),
+                'pixel-heart': patchCanvas(msg),
+              },
             };
           case 'SYNC_STEP':
             return { ...prev, stepIndex: msg.stepIndex as number };
@@ -119,21 +125,18 @@ export function useWebSocket(url: string, disabled = false) {
           case 'SYNC_CANVAS':
             return {
               ...prev,
-              canvas: (msg.canvas as (string | null)[][]) ?? prev.canvas,
-              progress: (msg.progress as number) ?? prev.progress,
-              players: (msg.players as WsState['players']) ?? prev.players,
+              games: {
+                ...prev.games,
+                'pixel-heart': patchCanvas(msg),
+              },
             };
           case 'SYNC_MATCH':
             return {
               ...prev,
-              matchBoard: (msg.matchBoard as string[]) ?? prev.matchBoard,
-              matchClaimed: (msg.matchClaimed as (string | null)[]) ?? prev.matchClaimed,
-              matchPending: (msg.matchPending as Record<string, string>) ?? prev.matchPending,
-              matchRevealed: (msg.matchRevealed as Record<string, string>) ?? prev.matchRevealed,
-              matchPaused: (msg.matchPaused as boolean) ?? prev.matchPaused,
-              matchScores: (msg.matchScores as MatchScore[]) ?? prev.matchScores,
-              matchGameOver: (msg.gameOver as boolean) ?? prev.matchGameOver,
-              matchElementCount: (msg.matchElementCount as number) ?? prev.matchElementCount,
+              games: {
+                ...prev.games,
+                'periodic-match': patchPeriodicMatch(msg),
+              },
             };
           case 'CONNECTED_USERS':
             return { ...prev, connectedUsers: (msg.users as ConnectedUser[]) ?? [] };
@@ -144,9 +147,9 @@ export function useWebSocket(url: string, disabled = false) {
     };
 
     ws.onclose = () => {
-      if (wsRef.current !== ws) return; // cleanup already ran — don't reconnect
+      if (wsRef.current !== ws) return;
       wsRef.current = null;
-      setState(prev => ({ ...prev, connected: false }));
+      setState((prev) => ({ ...prev, connected: false }));
       retryRef.current = setTimeout(() => {
         retryDelay.current = Math.min(retryDelay.current * 2, 5000);
         connect();
@@ -176,3 +179,6 @@ export function useWebSocket(url: string, disabled = false) {
 
   return { state, send };
 }
+
+/** @deprecated Use games['periodic-match'] — kept for gradual migration */
+export type MatchScore = MatchState['matchScores'][number];

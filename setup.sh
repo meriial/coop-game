@@ -11,8 +11,36 @@ if [ -z "$EMAIL" ]; then
   read -rp "Enter your email address: " EMAIL
 fi
 [ -z "$EMAIL" ] && { echo "Error: email cannot be empty." >&2; exit 1; }
-printf '%s' "$EMAIL" | grep -qE '@(drugbank\.com|twosmiles\.ca)$' \
-  || { echo "Error: email must end in @drugbank.com or @twosmiles.ca." >&2; exit 1; }
+
+# Fetch allowed domains from the worker (authoritative)
+CONFIG=$(curl -sf "$WORKER_URL/auth/config" 2>/dev/null) || {
+  echo "Error: could not reach worker at $WORKER_URL (is it running?)." >&2
+  exit 1
+}
+
+DOMAINS=$(printf '%s' "$CONFIG" | grep -oE '"[a-zA-Z0-9][a-zA-Z0-9._-]*"' \
+  | grep -v '^"allowed_email_domains"$' | tr -d '"' | paste -sd, -)
+
+[ -z "$DOMAINS" ] && {
+  echo "Error: worker returned invalid auth config." >&2
+  exit 1
+}
+
+_domain="${EMAIL##*@}"
+_allowed=0
+IFS=',' read -r -a _domains <<< "$DOMAINS"
+for _d in "${_domains[@]}"; do
+  _d="${_d#"${_d%%[![:space:]]*}"}"
+  _d="${_d%"${_d##*[![:space:]]}"}"
+  if [ "$(printf '%s' "$_domain" | tr '[:upper:]' '[:lower:]')" = "$(printf '%s' "$_d" | tr '[:upper:]' '[:lower:]')" ]; then
+    _allowed=1
+    break
+  fi
+done
+[ "$_allowed" -eq 0 ] && {
+  echo "Error: email domain not permitted (allowed: $DOMAINS)." >&2
+  exit 1
+}
 
 # 2. Request magic link
 RESPONSE=$(curl -sf -X POST "$WORKER_URL/auth/request" \
