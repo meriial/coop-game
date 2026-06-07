@@ -10,14 +10,16 @@ interface Props {
   myName: string;
   myOwner: string;
   onToggleDevRole?: () => void;
+  myVotes: Record<string, string | null>;
+  setMyVote: (pollId: string, v: string | null) => void;
 }
 
-export function ParticipantApp({ state, send, myName, myOwner, onToggleDevRole }: Props) {
+export function ParticipantApp({ state, send, myName, myOwner, onToggleDevRole, myVotes, setMyVote }: Props) {
   const step = presentationSteps[state.stepIndex] ?? presentationSteps[0];
   const { muted, toggleMute } = useSoundContext();
   return (
     <div className="w-screen h-screen bg-slate-950 overflow-hidden relative">
-      <StageRenderer wsState={state} send={send} isPresenter={false} myName={myName} myOwner={myOwner} />
+      <StageRenderer wsState={state} send={send} isPresenter={false} myName={myName} myOwner={myOwner} myVotes={myVotes} setMyVote={setMyVote} />
       <div className="absolute top-3 right-4 flex items-center gap-2 z-50">
         {stepHasSound(step) && (
           <button

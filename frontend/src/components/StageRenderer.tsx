@@ -13,9 +13,11 @@ interface Props {
   isPresenter: boolean;
   myName: string;
   myOwner: string;
+  myVotes: Record<string, string | null>;
+  setMyVote: (pollId: string, v: string | null) => void;
 }
 
-export function StageRenderer({ wsState, send, isPresenter, myName, myOwner }: Props) {
+export function StageRenderer({ wsState, send, isPresenter, myName, myOwner, myVotes, setMyVote }: Props) {
   const step = presentationSteps[wsState.stepIndex] ?? presentationSteps[0];
 
   const onVote = (pollId: string, choice: string, pollType: PollType) =>
@@ -64,6 +66,8 @@ export function StageRenderer({ wsState, send, isPresenter, myName, myOwner }: P
                 pollResults={wsState.pollResults[step.pollId] ?? {}}
                 pollValues={wsState.pollValues[step.pollId] ?? []}
                 pollResetSeq={wsState.pollResetSeq[step.pollId] ?? 0}
+                myVote={myVotes[step.pollId] ?? null}
+                setMyVote={(v) => setMyVote(step.pollId, v)}
                 onVote={onVote}
                 onResetPoll={onResetPoll}
                 isPresenter={isPresenter}

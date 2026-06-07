@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useWebSocket } from './hooks/useWebSocket';
 import { PresenterApp } from './PresenterApp';
 import { ParticipantApp } from './ParticipantApp';
@@ -73,6 +73,27 @@ export function App() {
   const myName = token ? decodeJwtName(token) : 'Guest';
   const myOwner = token ? (decodeJwtEmail(token) || myName) : myName;
 
+  const [myVotes, setMyVotesState] = useState<Record<string, string | null>>({});
+  const prevResetSeq = useRef<Record<string, number>>({});
+  useEffect(() => {
+    const newSeqs = state.pollResetSeq;
+    const toClear: string[] = [];
+    for (const [pid, seq] of Object.entries(newSeqs)) {
+      if (seq !== (prevResetSeq.current[pid] ?? 0)) toClear.push(pid);
+    }
+    if (toClear.length > 0) {
+      setMyVotesState(prev => {
+        const next = { ...prev };
+        for (const pid of toClear) delete next[pid];
+        return next;
+      });
+    }
+    prevResetSeq.current = { ...newSeqs };
+  }, [state.pollResetSeq]);
+  const setMyVote = useCallback((pollId: string, v: string | null) => {
+    setMyVotesState(prev => ({ ...prev, [pollId]: v }));
+  }, []);
+
   const toggleDevRole = IS_DEV
     ? () => setDevRoleOverride(prev => (prev ?? state.role) === 'presenter' ? 'participant' : 'presenter')
     : undefined;
@@ -97,7 +118,7 @@ export function App() {
   }
 
   if (state.role === 'presenter') {
-    return <PresenterApp state={state} send={send} myName={myName} myOwner={myOwner} token={token} onToggleDevRole={toggleDevRole} />;
+    return <PresenterApp state={state} send={send} myName={myName} myOwner={myOwner} token={token} onToggleDevRole={toggleDevRole} myVotes={myVotes} setMyVote={setMyVote} />;
   }
-  return <ParticipantApp state={state} send={send} myName={myName} myOwner={myOwner} onToggleDevRole={toggleDevRole} />;
+  return <ParticipantApp state={state} send={send} myName={myName} myOwner={myOwner} onToggleDevRole={toggleDevRole} myVotes={myVotes} setMyVote={setMyVote} />;
 }

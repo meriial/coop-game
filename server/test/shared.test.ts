@@ -58,6 +58,45 @@ describe('shared presentation features', () => {
     await participant.waitFor((m) => m.type === 'POLL_RESET' && m.pollId === 'workshop_feel');
   });
 
+  it('does not double-count a choice vote when the same participant reconnects', async () => {
+    participant.send({ type: 'SUBMIT_VOTE', pollId: 'workshop_feel', choice: 'The speed' });
+    const first = await participant.waitFor(
+      (m) => m.type === 'POLL_UPDATES' && m.pollId === 'workshop_feel',
+    );
+    expect((first.results as Record<string, number>)['The speed']).toBe(1);
+
+    participant.close();
+    const reconnected = await connectRoom({ role: 'participant', email: 'user@test.com', name: 'User', roomId });
+    await reconnected.waitFor((m) => m.type === 'WELCOME');
+
+    // Voting the same choice again should toggle it off (count → 0), not add a second entry (count → 2)
+    reconnected.send({ type: 'SUBMIT_VOTE', pollId: 'workshop_feel', choice: 'The speed' });
+    const second = await reconnected.waitFor(
+      (m) => m.type === 'POLL_UPDATES' && m.pollId === 'workshop_feel',
+    );
+    expect((second.results as Record<string, number>)['The speed']).toBe(0);
+  });
+
+  it('does not duplicate a slider value when the same participant reconnects', async () => {
+    participant.send({ type: 'SUBMIT_VOTE', pollId: 'role_preference', choice: '0.25', pollType: 'slider1d' });
+    const first = await participant.waitFor(
+      (m) => m.type === 'POLL_UPDATES' && m.pollId === 'role_preference' && Array.isArray(m.values),
+    );
+    expect((first.values as string[]).length).toBe(1);
+
+    participant.close();
+    const reconnected = await connectRoom({ role: 'participant', email: 'user@test.com', name: 'User', roomId });
+    await reconnected.waitFor((m) => m.type === 'WELCOME');
+
+    // Submitting again should upsert the existing record, not add a second one
+    reconnected.send({ type: 'SUBMIT_VOTE', pollId: 'role_preference', choice: '0.75', pollType: 'slider1d' });
+    const second = await reconnected.waitFor(
+      (m) => m.type === 'POLL_UPDATES' && m.pollId === 'role_preference' && Array.isArray(m.values),
+    );
+    expect((second.values as string[]).length).toBe(1);
+    expect((second.values as string[])[0]).toBe('0.75');
+  });
+
   it('broadcasts CONNECTED_USERS when clients join', async () => {
     const usersMsg = await presenter.waitFor(
       (m) =>

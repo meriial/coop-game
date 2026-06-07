@@ -7,6 +7,8 @@ interface PollWidgetProps {
   pollResults: Record<string, number>;
   pollValues: string[];
   pollResetSeq: number;
+  myVote: string | null;
+  setMyVote: (v: string | null) => void;
   onVote: (pollId: string, value: string, pollType: PollType) => void;
   onResetPoll: (pollId: string) => void;
   isPresenter: boolean;
@@ -69,10 +71,7 @@ export function ChoiceResults({ results, options, totalVotes }: { results: Recor
   );
 }
 
-function ChoiceWidget({ pollId, poll, pollResults, pollResetSeq, onVote, onResetPoll, isPresenter }: PollWidgetProps & { poll: Extract<PollConfig, { type: 'choice' }> }) {
-  const [myVote, setMyVote] = useState<string | null>(null);
-  useEffect(() => { setMyVote(null); }, [pollResetSeq]);
-
+function ChoiceWidget({ pollId, poll, pollResults, onVote, onResetPoll, isPresenter, myVote, setMyVote }: PollWidgetProps & { poll: Extract<PollConfig, { type: 'choice' }> }) {
   const totalVotes = Object.values(pollResults).reduce((s, n) => s + n, 0);
   const showResults = isPresenter || (myVote !== null && poll.showLiveResults);
 
@@ -158,13 +157,18 @@ export function Slider1DResults({ values, leftLabel, rightLabel }: { values: str
   );
 }
 
-function Slider1DWidget({ pollId, poll, pollValues, pollResetSeq, onVote, onResetPoll, isPresenter }: PollWidgetProps & { poll: Extract<PollConfig, { type: 'slider1d' }> }) {
-  const [localValue, setLocalValue] = useState(0.5);
-  const [hasVoted, setHasVoted] = useState(false);
+function Slider1DWidget({ pollId, poll, pollValues, pollResetSeq, onVote, onResetPoll, isPresenter, myVote, setMyVote }: PollWidgetProps & { poll: Extract<PollConfig, { type: 'slider1d' }> }) {
+  const [localValue, setLocalValue] = useState(() => myVote !== null ? parseFloat(myVote) : 0.5);
   const [isDragging, setIsDragging] = useState(false);
+  const hasVoted = myVote !== null;
   const trackRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { setLocalValue(0.5); setHasVoted(false); }, [pollResetSeq]);
+  const prevResetSeq = useRef(pollResetSeq);
+  useEffect(() => {
+    if (pollResetSeq === prevResetSeq.current) return;
+    prevResetSeq.current = pollResetSeq;
+    setLocalValue(0.5);
+  }, [pollResetSeq]);
 
   const valueFromEvent = useCallback((e: PointerEvent | React.PointerEvent) => {
     if (!trackRef.current) return localValue;
@@ -189,8 +193,9 @@ function Slider1DWidget({ pollId, poll, pollValues, pollResetSeq, onVote, onRese
     setIsDragging(false);
     const v = valueFromEvent(e);
     setLocalValue(v);
-    setHasVoted(true);
-    onVote(pollId, v.toFixed(4), 'slider1d');
+    const encoded = v.toFixed(4);
+    setMyVote(encoded);
+    onVote(pollId, encoded, 'slider1d');
   };
 
   const showResults = isPresenter || (hasVoted && poll.showLiveResults);
@@ -362,14 +367,21 @@ export function Slider2DResults({ values, labels }: { values: string[]; labels: 
   );
 }
 
-function Slider2DWidget({ pollId, poll, pollValues, pollResetSeq, onVote, onResetPoll, isPresenter }: PollWidgetProps & { poll: Extract<PollConfig, { type: 'slider2d' }> }) {
-  // Start at centroid of triangle
-  const [svgPos, setSvgPos] = useState<[number, number]>([200, TRI_H * (2 / 3)]);
-  const [hasVoted, setHasVoted] = useState(false);
+function Slider2DWidget({ pollId, poll, pollValues, pollResetSeq, onVote, onResetPoll, isPresenter, myVote, setMyVote }: PollWidgetProps & { poll: Extract<PollConfig, { type: 'slider2d' }> }) {
+  const [svgPos, setSvgPos] = useState<[number, number]>(() => {
+    if (myVote) { const parsed = parseBarySvg(myVote); if (parsed) return parsed; }
+    return [200, TRI_H * (2 / 3)];
+  });
   const [isDragging, setIsDragging] = useState(false);
+  const hasVoted = myVote !== null;
   const svgRef = useRef<SVGSVGElement>(null);
 
-  useEffect(() => { setSvgPos([200, TRI_H * (2 / 3)]); setHasVoted(false); }, [pollResetSeq]);
+  const prevResetSeq = useRef(pollResetSeq);
+  useEffect(() => {
+    if (pollResetSeq === prevResetSeq.current) return;
+    prevResetSeq.current = pollResetSeq;
+    setSvgPos([200, TRI_H * (2 / 3)]);
+  }, [pollResetSeq]);
 
   const svgCoordsFromPointer = (clientX: number, clientY: number): [number, number] => {
     if (!svgRef.current) return svgPos;
@@ -400,7 +412,7 @@ function Slider2DWidget({ pollId, poll, pollValues, pollResetSeq, onVote, onRese
     setSvgPos(pos);
     const [w1, w2] = svgToBarycentric(pos[0], pos[1]);
     const encoded = `${w1.toFixed(4)},${w2.toFixed(4)}`;
-    setHasVoted(true);
+    setMyVote(encoded);
     onVote(pollId, encoded, 'slider2d');
   };
 

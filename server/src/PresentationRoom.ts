@@ -69,7 +69,8 @@ export class PresentationRoom {
     const name = request.headers.get('X-User-Name') ?? 'Guest';
     const ownerId = email;
     const isAgent = Boolean(agentLabel);
-    const participantId = crypto.randomUUID();
+    const displayName = isAgent && agentLabel ? `${name}'s ${agentLabel}` : name;
+    const participantId = email || displayName;
 
     if (isAgent) {
       const activeGameId = this.getActiveGameId();
@@ -85,8 +86,6 @@ export class PresentationRoom {
         }
       }
     }
-
-    const displayName = isAgent && agentLabel ? `${name}'s ${agentLabel}` : name;
 
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
