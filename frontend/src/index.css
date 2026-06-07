@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/* Game UIs live in separate workspace packages; Tailwind's auto source
+   detection only scans this app, so their class names (e.g. aspect-square)
+   would be dropped. Register the package sources explicitly. */
+@source "../../packages/game-core/src/**/*.{ts,tsx}";
+@source "../../packages/games/periodic-match/src/**/*.{ts,tsx}";
+@source "../../packages/games/pixel-heart/src/**/*.{ts,tsx}";
+
 *, *::before, *::after {
   box-sizing: border-box;
 }
