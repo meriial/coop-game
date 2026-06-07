@@ -1,8 +1,20 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef, useState } from 'react';
 import type { WsState } from '../../hooks/useWebSocket';
 
 const MIN_ELEMENTS = 5;
 const MAX_ELEMENTS = 118;
+const GAP = 3;
+
+function bestCols(W: number, H: number, N: number): number {
+  // Find the fewest columns (= largest square tiles) where all rows fit within H
+  for (let c = 1; c <= N; c++) {
+    const tileW = (W - (c - 1) * GAP) / c;
+    const rows = Math.ceil(N / c);
+    const totalH = rows * tileW + (rows - 1) * GAP;
+    if (totalH <= H) return c;
+  }
+  return N;
+}
 
 interface Props {
   wsState: WsState;
@@ -13,6 +25,38 @@ interface Props {
 
 export function PeriodicMatch({ wsState, send, isHost, myName }: Props) {
   const { matchBoard, matchClaimed, matchPending, matchPaused, matchScores, matchGameOver, matchElementCount } = wsState;
+
+  // Grid sizing
+  const gridRef = useRef<HTMLDivElement>(null);
+  const nRef = useRef(matchBoard.length);
+  nRef.current = matchBoard.length;
+  const [cols, setCols] = useState(17);
+
+  const recomputeCols = useCallback(() => {
+    const el = gridRef.current;
+    if (!el || nRef.current === 0) return;
+    setCols(bestCols(el.clientWidth, el.clientHeight, nRef.current));
+  }, []);
+
+  // Recompute when tile count changes
+  useEffect(() => {
+    recomputeCols();
+  }, [matchBoard.length, recomputeCols]);
+
+  // Observe container resize
+  useEffect(() => {
+    const el = gridRef.current;
+    if (!el) return;
+    const obs = new ResizeObserver(recomputeCols);
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [recomputeCols]);
+
+  // Element count input state
+  const [inputVal, setInputVal] = useState(String(matchElementCount));
+  useEffect(() => {
+    setInputVal(String(matchElementCount));
+  }, [matchElementCount]);
 
   useEffect(() => {
     send({ type: 'GAME_JOIN', name: myName });
@@ -29,6 +73,11 @@ export function PeriodicMatch({ wsState, send, isHost, myName }: Props) {
     send({ type: 'MATCH_SET_SIZE', count: Math.min(Math.max(MIN_ELEMENTS, n), MAX_ELEMENTS) });
   }, [send]);
 
+  const commitInput = (val: string) => {
+    const n = parseInt(val, 10);
+    if (!isNaN(n)) setSize(n);
+  };
+
   const totalPairs = matchBoard.length / 2;
   const claimedPairs = matchClaimed.filter(c => c !== null).length / 2;
   const progressPct = totalPairs > 0 ? (claimedPairs / totalPairs) * 100 : 0;
@@ -37,7 +86,7 @@ export function PeriodicMatch({ wsState, send, isHost, myName }: Props) {
     <div className="w-full h-full flex overflow-hidden bg-slate-950 relative">
       {/* Grid area */}
       <div className="flex-1 flex flex-col gap-2 p-3 overflow-hidden min-w-0">
-        {/* Header row */}
+        {/* Header */}
         <div className="flex items-center justify-between shrink-0 gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <h2 className="text-white text-lg font-bold shrink-0">Element Match</h2>
@@ -60,14 +109,15 @@ export function PeriodicMatch({ wsState, send, isHost, myName }: Props) {
           />
         </div>
 
-        {/* Tile grid */}
+        {/* Tile grid — fills remaining space */}
         <div
+          ref={gridRef}
           className="flex-1 overflow-hidden"
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(54px, 1fr))',
-            gap: '3px',
-            alignContent: 'start',
+            gridTemplateColumns: `repeat(${cols}, 1fr)`,
+            gap: `${GAP}px`,
+            alignContent: 'center',
           }}
         >
           {matchBoard.map((symbol, pos) => {
@@ -107,10 +157,7 @@ export function PeriodicMatch({ wsState, send, isHost, myName }: Props) {
                 className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-800/60"
               >
                 <span className="text-slate-600 text-xs w-3 shrink-0">{i + 1}</span>
-                <div
-                  className="w-2 h-2 rounded-full shrink-0"
-                  style={{ background: player.color }}
-                />
+                <div className="w-2 h-2 rounded-full shrink-0" style={{ background: player.color }} />
                 <span className="text-slate-300 text-xs flex-1 truncate">{player.name}</span>
                 <span className="text-white text-xs font-bold tabular-nums">{player.count}</span>
               </div>
@@ -120,29 +167,38 @@ export function PeriodicMatch({ wsState, send, isHost, myName }: Props) {
 
         {isHost && (
           <div className="flex flex-col gap-2.5 shrink-0 pt-2 border-t border-slate-700/60">
-            {/* Element count stepper */}
             <div className="flex flex-col gap-1.5">
-              <span className="text-slate-500 text-xs">Elements</span>
+              <span className="text-slate-500 text-xs">Elements (5–118)</span>
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => setSize(matchElementCount - 1)}
                   disabled={matchElementCount <= MIN_ELEMENTS}
-                  className="w-7 h-7 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-30 disabled:cursor-not-allowed text-slate-200 text-base font-bold transition-colors flex items-center justify-center leading-none"
+                  className="w-7 h-7 shrink-0 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-30 disabled:cursor-not-allowed text-slate-200 font-bold transition-colors flex items-center justify-center text-base leading-none"
                 >
                   −
                 </button>
-                <span className="flex-1 text-center text-white text-sm font-mono font-bold tabular-nums">
-                  {matchElementCount}
-                </span>
+                <input
+                  type="number"
+                  min={MIN_ELEMENTS}
+                  max={MAX_ELEMENTS}
+                  value={inputVal}
+                  onChange={e => setInputVal(e.target.value)}
+                  onBlur={e => commitInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') commitInput((e.target as HTMLInputElement).value);
+                  }}
+                  className="flex-1 min-w-0 bg-slate-800 border border-slate-600 rounded-md text-center text-white text-sm font-mono font-bold focus:outline-none focus:border-indigo-500 focus:ring-1"
+                  style={{ appearance: 'textfield' } as React.CSSProperties}
+                />
                 <button
                   onClick={() => setSize(matchElementCount + 1)}
                   disabled={matchElementCount >= MAX_ELEMENTS}
-                  className="w-7 h-7 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-30 disabled:cursor-not-allowed text-slate-200 text-base font-bold transition-colors flex items-center justify-center leading-none"
+                  className="w-7 h-7 shrink-0 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-30 disabled:cursor-not-allowed text-slate-200 font-bold transition-colors flex items-center justify-center text-base leading-none"
                 >
                   +
                 </button>
               </div>
-              <p className="text-slate-600 text-xs leading-tight">applies on reshuffle</p>
+              <p className="text-slate-600 text-xs">applies on reshuffle</p>
             </div>
 
             <button
@@ -175,10 +231,7 @@ export function PeriodicMatch({ wsState, send, isHost, myName }: Props) {
             <p className="text-slate-400 text-sm mb-5">Final scores</p>
             <div className="flex flex-col gap-2 mb-6 text-left">
               {matchScores.map((p, i) => (
-                <div
-                  key={p.id}
-                  className="flex items-center gap-3 px-3 py-2 bg-slate-800 rounded-lg"
-                >
+                <div key={p.id} className="flex items-center gap-3 px-3 py-2 bg-slate-800 rounded-lg">
                   <span className="text-slate-500 text-sm w-4">{i + 1}</span>
                   <div className="w-3 h-3 rounded-full shrink-0" style={{ background: p.color }} />
                   <span className="text-slate-200 text-sm flex-1">{p.name}</span>
