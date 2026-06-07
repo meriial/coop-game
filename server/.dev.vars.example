@@ -4,3 +4,4 @@
 JWT_SECRET=replace-with-local-secret
 ADMIN_EMAIL=you@your-allowed-domain.example
 ALLOWED_EMAIL_DOMAINS=your-allowed-domain.example
+REPO_URL=https://github.com/your-org/your-workshop-repo.git

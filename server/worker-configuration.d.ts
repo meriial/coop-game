@@ -6,6 +6,7 @@ interface __BaseEnv_Env {
 	JWT_SECRET: string;
 	ADMIN_EMAIL: string;
 	ALLOWED_EMAIL_DOMAINS: string;
+	REPO_URL: string;
 	GAME_ROOM: DurableObjectNamespace<import("./src/index").GameRoom>;
 	PRESENTATION_ROOM: DurableObjectNamespace<import("./src/index").PresentationRoom>;
 }

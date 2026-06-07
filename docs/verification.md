@@ -22,10 +22,11 @@ cp server/.dev.vars.example server/.dev.vars
 | `JWT_SECRET` | `.dev.vars` / `wrangler secret` | Signs session JWTs |
 | `ADMIN_EMAIL` | `.dev.vars` / `wrangler secret` | Email that gets **presenter** role |
 | `ALLOWED_EMAIL_DOMAINS` | `.dev.vars` / `wrangler secret` | Comma-separated hostnames for magic-link auth (e.g. `your-domain.example,other.example`) |
+| `REPO_URL` | `.dev.vars` / `wrangler secret` | Git clone URL returned by `GET /auth/config` for `setup.sh` |
 
 Magic-link auth only accepts emails on `ALLOWED_EMAIL_DOMAINS`. If unset, `/auth/request` returns 500 (fail fast) — set it in `.dev.vars` / `wrangler secret`. Vitest uses `admin@test.com` with a test secret (tests mint JWTs directly) — not the magic-link flow.
 
-**Public config endpoint:** `GET /auth/config` returns `{ "allowed_email_domains": ["..."] }` (no secrets). [`setup.sh`](../setup.sh) calls this before `POST /auth/request` to validate the participant email against the worker's env vars — participants do not need any local `ALLOWED_EMAIL_DOMAINS` export.
+**Public config endpoint:** `GET /auth/config` returns `{ "allowed_email_domains": ["..."], "repo_url": "https://..." }` (no secrets). [`setup.sh`](../setup.sh) requires a worker URL as the first argument (`setup.sh <worker-url> [email]`), fetches `/auth/config` to validate the email domain and resolve the clone URL — no local `ALLOWED_EMAIL_DOMAINS` or `REPO_URL` export needed.
 
 Production:
 
@@ -33,6 +34,7 @@ Production:
 cd server && pnpm exec wrangler secret put JWT_SECRET
 cd server && pnpm exec wrangler secret put ADMIN_EMAIL
 cd server && pnpm exec wrangler secret put ALLOWED_EMAIL_DOMAINS
+cd server && pnpm exec wrangler secret put REPO_URL
 ```
 
 Without `RESEND_API_KEY`, magic links are **not emailed** — they appear in the terminal or at `GET /auth/inbox`.

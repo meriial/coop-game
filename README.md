@@ -8,13 +8,14 @@ An interactive presentation platform for AI workshops. The presenter drives a sl
 
 ## Setup (allowed-domain participants)
 
-Run this single command in your terminal — it handles everything:
+Run this in your terminal (replace the worker URL with your organizer's deployed worker):
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/meriial/coop-game/main/setup.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/meriial/coop-game/main/setup.sh) \
+  https://your-worker.YOUR-SUBDOMAIN.workers.dev
 ```
 
-You'll be prompted for an email on an allowed domain (`ALLOWED_EMAIL_DOMAINS` on the deployed worker). A magic link will arrive in your inbox — click it to authenticate, and your browser will open the presentation automatically.
+You'll be prompted for an email on an allowed domain (`ALLOWED_EMAIL_DOMAINS` on that worker). A magic link will arrive in your inbox — click it to authenticate, and your browser will open the presentation automatically.
 
 **What you see depends on who you are:**
 - **Participants** — slides sync in real-time, vote in polls, paint the pixel heart
@@ -151,10 +152,9 @@ pnpm exec wrangler secret put FROM_EMAIL       # e.g. info@yourdomain.com
 pnpm exec wrangler secret put JWT_SECRET       # run: openssl rand -hex 32
 pnpm exec wrangler secret put ADMIN_EMAIL      # presenter email (must be on an allowed domain)
 pnpm exec wrangler secret put ALLOWED_EMAIL_DOMAINS  # comma-separated, e.g. your-domain.example,other.example
+pnpm exec wrangler secret put REPO_URL               # git URL for setup.sh to clone
 
-# 4. Update the default WORKER_URL in setup.sh to match your worker subdomain
-
-# 5. Deploy
+# 4. Deploy
 pnpm exec wrangler deploy
 ```
 
@@ -171,7 +171,8 @@ cd server && pnpm dev        # worker on http://localhost:8787
 Then in a second terminal, run setup pointed at localhost — the magic link prints directly in the terminal:
 
 ```bash
-WORKER_URL=http://localhost:8787 bash <(curl -fsSL https://raw.githubusercontent.com/meriial/coop-game/main/setup.sh) you@your-allowed-domain.example
+bash <(curl -fsSL https://raw.githubusercontent.com/meriial/coop-game/main/setup.sh) \
+  http://localhost:8787 you@your-allowed-domain.example
 ```
 
 This authenticates you, writes your token to `frontend/.env`, and opens `http://localhost:5174` as the presenter. Open a second browser window at `http://localhost:5174` (in a private/incognito window with no token) to see the participant view.

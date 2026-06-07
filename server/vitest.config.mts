@@ -10,6 +10,7 @@ export default defineConfig({
           JWT_SECRET: 'test-jwt-secret',
           ADMIN_EMAIL: 'admin@test.com',
           ALLOWED_EMAIL_DOMAINS: 'example.test',
+          REPO_URL: 'https://github.com/example-org/workshop-game.git',
         },
       },
     }),

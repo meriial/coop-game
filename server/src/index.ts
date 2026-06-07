@@ -10,6 +10,7 @@ interface Env {
   JWT_SECRET: string;
   ADMIN_EMAIL: string;
   ALLOWED_EMAIL_DOMAINS?: string;
+  REPO_URL?: string;
 }
 
 const CORS = {
@@ -204,7 +205,14 @@ function handleAuthConfig(env: Env): Response {
       { status: 500, headers: CORS },
     );
   }
-  return Response.json({ allowed_email_domains: domains }, { headers: CORS });
+  const repoUrl = env.REPO_URL?.trim();
+  if (!repoUrl) {
+    return Response.json(
+      { error: 'Server misconfigured: REPO_URL is not set' },
+      { status: 500, headers: CORS },
+    );
+  }
+  return Response.json({ allowed_email_domains: domains, repo_url: repoUrl }, { headers: CORS });
 }
 
 async function handleAuthRequest(request: Request, env: Env): Promise<Response> {

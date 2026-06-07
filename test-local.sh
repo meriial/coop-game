@@ -49,6 +49,7 @@ cat > "$WORK_DIR/server/.dev.vars" <<EOF
 ALLOWED_EMAIL_DOMAINS=${TEST_EMAIL_DOMAIN}
 JWT_SECRET=test-jwt-secret-local-e2e
 ADMIN_EMAIL=admin@${TEST_EMAIL_DOMAIN}
+REPO_URL=https://github.com/example-org/workshop-game.git
 EOF
 # Seed a minimal .env so the starter app has the game URL pointing to our test worker
 mkdir -p "$WORK_DIR/examples/starter"
@@ -76,7 +77,7 @@ echo "✓ Worker ready"
 
 # 3. Run setup.sh in background (DRY_RUN=1 skips npm start)
 echo "▶ Running setup.sh..."
-WORKER_URL="http://localhost:$WORKER_PORT" DRY_RUN=1 bash setup.sh "$TEST_EMAIL" \
+DRY_RUN=1 bash setup.sh "http://localhost:$WORKER_PORT" "$TEST_EMAIL" \
   > /tmp/setup-e2e.log 2>&1 &
 SETUP_PID=$!
 

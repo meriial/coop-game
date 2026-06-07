@@ -1,12 +1,21 @@
 #!/usr/bin/env bash
+# Usage: setup.sh <worker-url> [email]
+#   Or:  WORKER_URL=<url> setup.sh [email]
 set -euo pipefail
 
-WORKER_URL="${WORKER_URL:-https://workshop-game.music-abb.workers.dev}"
-REPO_URL="https://github.com/meriial/coop-game.git"
-CLONE_DIR="coop-game"
+if [ -n "${1:-}" ] && printf '%s' "$1" | grep -qE '^https?://'; then
+  WORKER_URL="$1"
+  shift
+  EMAIL="${1:-}"
+elif [ -n "${WORKER_URL:-}" ]; then
+  EMAIL="${1:-}"
+else
+  echo "Usage: setup.sh <worker-url> [email]" >&2
+  echo "   Or: WORKER_URL=<url> setup.sh [email]" >&2
+  exit 1
+fi
 
 # 1. Get email (positional arg or interactive prompt)
-EMAIL="${1:-}"
 if [ -z "$EMAIL" ]; then
   read -rp "Enter your email address: " EMAIL
 fi
@@ -18,13 +27,25 @@ CONFIG=$(curl -sf "$WORKER_URL/auth/config" 2>/dev/null) || {
   exit 1
 }
 
-DOMAINS=$(printf '%s' "$CONFIG" | grep -oE '"[a-zA-Z0-9][a-zA-Z0-9._-]*"' \
-  | grep -v '^"allowed_email_domains"$' | tr -d '"' | paste -sd, -)
+DOMAINS=$(
+  printf '%s' "$CONFIG" |
+    sed 's/.*"allowed_email_domains":\[//' |
+    sed 's/\].*//' |
+    sed 's/"//g' |
+    tr -d ' '
+)
 
 [ -z "$DOMAINS" ] && {
-  echo "Error: worker returned invalid auth config." >&2
+  echo "Error: worker returned invalid auth config (allowed_email_domains)." >&2
   exit 1
 }
+
+REPO_URL=$(printf '%s' "$CONFIG" | grep -o '"repo_url":"[^"]*"' | sed 's/"repo_url":"//;s/"//')
+[ -z "$REPO_URL" ] && {
+  echo "Error: worker returned invalid auth config (repo_url)." >&2
+  exit 1
+}
+CLONE_DIR=$(basename "$REPO_URL" .git)
 
 _domain="${EMAIL##*@}"
 _allowed=0

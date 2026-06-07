@@ -28,10 +28,11 @@ describe('auth domain enforcement', () => {
     expect(env.ALLOWED_EMAIL_DOMAINS).toContain('example.test');
   });
 
-  it('GET /auth/config returns configured domains', async () => {
+  it('GET /auth/config returns configured domains and repo_url', async () => {
     const res = await SELF.fetch('http://localhost/auth/config');
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { allowed_email_domains: string[] };
+    const body = (await res.json()) as { allowed_email_domains: string[]; repo_url: string };
     expect(body.allowed_email_domains).toContain('example.test');
+    expect(body.repo_url).toBe('https://github.com/example-org/workshop-game.git');
   });
 });
