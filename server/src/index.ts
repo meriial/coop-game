@@ -403,12 +403,12 @@ export default {
       } catch {
         return new Response('Unauthorized', { status: 401, headers: CORS });
       }
-      // Dev-only: localhost connections may override role for testing
+      // Role override: localhost can switch either direction; admins can downgrade to participant anywhere
       const reqUrl = new URL(request.url);
       const isLocalhost = reqUrl.hostname === 'localhost' || reqUrl.hostname === '127.0.0.1';
-      if (isLocalhost) {
-        const devRole = reqUrl.searchParams.get('devRole');
-        if (devRole === 'presenter' || devRole === 'participant') role = devRole;
+      const devRole = reqUrl.searchParams.get('devRole');
+      if (devRole === 'presenter' || devRole === 'participant') {
+        if (isLocalhost || (role === 'presenter' && devRole === 'participant')) role = devRole;
       }
       const headers = new Headers(request.headers);
       headers.set('X-User-Role', role);

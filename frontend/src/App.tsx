@@ -25,6 +25,15 @@ function decodeJwtEmail(token: string): string {
   return typeof payload.email === 'string' ? payload.email : '';
 }
 
+function isJwtExpired(token: string): boolean {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))) as { exp?: number };
+    return typeof payload.exp === 'number' && Date.now() / 1000 > payload.exp;
+  } catch {
+    return false;
+  }
+}
+
 function getToken(): string | null {
   // 1. URL param (takes precedence, stored for future reloads)
   const params = new URLSearchParams(window.location.search);
@@ -36,9 +45,15 @@ function getToken(): string | null {
     window.history.replaceState({}, '', newSearch ? `?${newSearch}` : window.location.pathname);
     return urlToken;
   }
-  // 2. localStorage (persists across reloads)
+  // 2. localStorage (persists across reloads) — discard if expired
   const stored = localStorage.getItem(TOKEN_KEY);
-  if (stored) return stored;
+  if (stored) {
+    if (isJwtExpired(stored)) {
+      localStorage.removeItem(TOKEN_KEY);
+      return null;
+    }
+    return stored;
+  }
   // 3. Env var baked in at build/dev time (written by dev.sh)
   const envToken = import.meta.env.VITE_AGENT_TOKEN as string | undefined;
   return envToken || null;
@@ -66,7 +81,7 @@ export function App() {
 
   const wsUrl = useMemo(() => {
     const base = `${WS_BASE}/room/main?token=${encodeURIComponent(token ?? '')}`;
-    return IS_DEV && devRoleOverride ? `${base}&devRole=${devRoleOverride}` : base;
+    return devRoleOverride ? `${base}&devRole=${devRoleOverride}` : base;
   }, [token, devRoleOverride]);
 
   const { state, send } = useWebSocket(wsUrl, !token);
@@ -94,7 +109,7 @@ export function App() {
     setMyVotesState(prev => ({ ...prev, [pollId]: v }));
   }, []);
 
-  const toggleDevRole = IS_DEV
+  const toggleDevRole = (IS_DEV || state.role === 'presenter')
     ? () => setDevRoleOverride(prev => (prev ?? state.role) === 'presenter' ? 'participant' : 'presenter')
     : undefined;
 
