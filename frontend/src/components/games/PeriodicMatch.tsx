@@ -30,27 +30,31 @@ export function PeriodicMatch({ wsState, send, isHost, myName }: Props) {
   const gridRef = useRef<HTMLDivElement>(null);
   const nRef = useRef(matchBoard.length);
   nRef.current = matchBoard.length;
-  const [cols, setCols] = useState(17);
+  const [{ cols, tileSize }, setGridState] = useState({ cols: 17, tileSize: 54 });
 
-  const recomputeCols = useCallback(() => {
+  const recomputeGrid = useCallback(() => {
     const el = gridRef.current;
     if (!el || nRef.current === 0) return;
-    setCols(bestCols(el.clientWidth, el.clientHeight, nRef.current));
+    const W = el.clientWidth;
+    const H = el.clientHeight;
+    const c = bestCols(W, H, nRef.current);
+    const s = Math.floor((W - (c - 1) * GAP) / c);
+    setGridState({ cols: c, tileSize: s });
   }, []);
 
   // Recompute when tile count changes
   useEffect(() => {
-    recomputeCols();
-  }, [matchBoard.length, recomputeCols]);
+    recomputeGrid();
+  }, [matchBoard.length, recomputeGrid]);
 
   // Observe container resize
   useEffect(() => {
     const el = gridRef.current;
     if (!el) return;
-    const obs = new ResizeObserver(recomputeCols);
+    const obs = new ResizeObserver(recomputeGrid);
     obs.observe(el);
     return () => obs.disconnect();
-  }, [recomputeCols]);
+  }, [recomputeGrid]);
 
   // Element count input state
   const [inputVal, setInputVal] = useState(String(matchElementCount));
@@ -135,6 +139,7 @@ export function PeriodicMatch({ wsState, send, isHost, myName }: Props) {
                 pendingColor={isPending ? pendingColor : null}
                 isClickable={isClickable}
                 dimmed={matchPaused && !isClaimed}
+                tileSize={tileSize}
                 onClick={isClickable ? () => handleFlip(pos) : undefined}
               />
             );
@@ -260,10 +265,11 @@ interface TileProps {
   pendingColor: string | null;
   isClickable: boolean;
   dimmed: boolean;
+  tileSize: number;
   onClick?: () => void;
 }
 
-function Tile({ symbol, claimedColor, pendingColor, isClickable, dimmed, onClick }: TileProps) {
+function Tile({ symbol, claimedColor, pendingColor, isClickable, dimmed, tileSize, onClick }: TileProps) {
   const isClaimed = claimedColor !== null;
   const isPending = pendingColor !== null;
   const revealed = isClaimed || isPending;
@@ -290,15 +296,17 @@ function Tile({ symbol, claimedColor, pendingColor, isClickable, dimmed, onClick
     boxShadow = undefined;
   }
 
+  const fontSize = Math.round(tileSize * 0.52);
+
   return (
     <button
       onClick={onClick}
       disabled={!isClickable}
       className={[
-        'aspect-square rounded flex items-center justify-center text-sm font-bold transition-all duration-75 select-none',
+        'aspect-square rounded flex items-center justify-center font-bold transition-all duration-75 select-none leading-none',
         isClickable ? 'hover:brightness-125 cursor-pointer active:scale-95' : 'cursor-default',
       ].join(' ')}
-      style={{ backgroundColor: bg, color: textColor, border, boxShadow, opacity: dimmed ? 0.4 : 1 }}
+      style={{ backgroundColor: bg, color: textColor, border, boxShadow, opacity: dimmed ? 0.4 : 1, fontSize }}
       title={revealed ? symbol : undefined}
     >
       {revealed ? symbol : null}
