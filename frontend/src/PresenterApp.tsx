@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Volume2, VolumeX, Presentation, User } from 'lucide-react';
+import { Volume2, VolumeX, Presentation, User, Settings } from 'lucide-react';
+import type { BgConfig } from '@workshop/protocol';
 import { presentationSteps, stepHasSound } from './config/presentationConfig';
 import type { WsState } from './hooks/useWebSocket';
 import { StageRenderer } from './components/StageRenderer';
+import { SlideBackground } from './components/SlideBackground';
+import { ParamControls } from './components/ParamControls';
+import { get as getBackground, list as listBackgrounds, resolveParams } from './backgrounds/registry';
 import { useSoundContext } from './contexts/SoundContext';
 import { UserSwitcher } from './UserSwitcher';
 
@@ -23,6 +27,8 @@ export function PresenterApp({ state, send, myName, myOwner, token, onToggleDevR
   const { muted, toggleMute } = useSoundContext();
   const total = presentationSteps.length;
   const [usersOpen, setUsersOpen] = useState(false);
+  const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
+  const [bgDrawerOpen, setBgDrawerOpen] = useState(false);
   const [inviteOpen, setInviteOpen]     = useState(false);
   const [inviteEmail, setInviteEmail]   = useState('');
   const [inviteName, setInviteName]     = useState('');
@@ -68,6 +74,27 @@ export function PresenterApp({ state, send, myName, myOwner, token, onToggleDevR
     send({ type: 'STEP_CHANGE', stepIndex: clamped });
   };
 
+  // ── background config ──
+  const bgConfig = state.bgConfig;
+  const backgrounds = listBackgrounds();
+  const currentBg = getBackground(bgConfig.backgroundId) ?? backgrounds[0];
+  const currentStrategy =
+    currentBg?.strategies.find((s) => s.id === bgConfig.strategyId) ?? currentBg?.strategies[0];
+
+  const sendBg = (next: BgConfig) => send({ type: 'BG_CONFIG', config: next });
+  const setBackground = (backgroundId: string) => {
+    const bg = getBackground(backgroundId);
+    if (!bg) return;
+    const strategyId = bg.strategies[0].id;
+    sendBg({ backgroundId, strategyId, params: resolveParams(bg, strategyId, bgConfig.params) });
+  };
+  const setStrategy = (strategyId: string) => {
+    if (!currentBg) return;
+    sendBg({ backgroundId: currentBg.id, strategyId, params: resolveParams(currentBg, strategyId, bgConfig.params) });
+  };
+  const setParam = (key: string, value: number | string | boolean) =>
+    sendBg({ ...bgConfig, params: { ...bgConfig.params, [key]: value } });
+
   useEffect(() => {
     if (isGame) return; // disable global keys during game
     const handler = (e: KeyboardEvent) => {
@@ -81,7 +108,8 @@ export function PresenterApp({ state, send, myName, myOwner, token, onToggleDevR
   return (
     <div className="w-screen h-screen bg-slate-950 overflow-hidden relative flex flex-col">
       {/* Main stage */}
-      <div className="flex-1 overflow-hidden relative">
+      <div className="flex-1 overflow-hidden relative isolate">
+        <SlideBackground config={state.bgConfig} />
         <StageRenderer wsState={state} send={send} isPresenter myName={myName} myOwner={myOwner} myVotes={myVotes} setMyVote={setMyVote} />
         {/* Name badge + optional sound toggle */}
         <div className="absolute top-3 right-4 flex items-center gap-2 z-50">
@@ -126,6 +154,13 @@ export function PresenterApp({ state, send, myName, myOwner, token, onToggleDevR
           >
             + Invite
           </button>
+          <button
+            onClick={() => setSettingsMenuOpen(o => !o)}
+            className="ml-1 flex items-center justify-center w-7 h-7 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-400 hover:text-slate-200 transition-colors"
+            title="Settings"
+          >
+            <Settings size={14} />
+          </button>
         </div>
 
         <div className="flex items-center gap-3">
@@ -150,6 +185,95 @@ export function PresenterApp({ state, send, myName, myOwner, token, onToggleDevR
 
         <div className="text-slate-500 text-xs hidden sm:block">
           {isGame ? 'Game active — arrow keys disabled' : '← → or PageUp/Down to navigate'}
+        </div>
+      </div>
+
+      {/* Settings menu (cog) */}
+      {settingsMenuOpen && (
+        <div className="fixed inset-0 z-40" onClick={() => setSettingsMenuOpen(false)} />
+      )}
+      <div className={[
+        'fixed bottom-[52px] left-6 z-50 bg-slate-900 border border-slate-700/60 rounded-xl shadow-2xl w-48 transition-all duration-200 origin-bottom-left',
+        settingsMenuOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none',
+      ].join(' ')}>
+        <div className="px-3 py-2 border-b border-slate-700/60">
+          <span className="text-slate-400 text-[10px] font-medium uppercase tracking-wider">Settings</span>
+        </div>
+        <div className="py-1.5">
+          <button
+            onClick={() => { setBgDrawerOpen(true); setSettingsMenuOpen(false); }}
+            className="w-full text-left px-3 py-2 text-sm text-slate-300 hover:bg-slate-800/60 transition-colors"
+          >
+            Background
+          </button>
+        </div>
+      </div>
+
+      {/* Background settings drawer */}
+      {bgDrawerOpen && (
+        <div className="fixed inset-0 z-40 bg-black/30" onClick={() => setBgDrawerOpen(false)} />
+      )}
+      <div
+        className={[
+          'fixed top-0 right-0 h-full z-50 w-72 bg-slate-900 border-l border-slate-700/60 shadow-2xl',
+          'flex flex-col overflow-y-auto transition-transform duration-200',
+          bgDrawerOpen ? 'translate-x-0' : 'translate-x-full',
+        ].join(' ')}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700/60 shrink-0">
+          <span className="text-white font-semibold text-sm">Background</span>
+          <button
+            onClick={() => setBgDrawerOpen(false)}
+            className="text-slate-400 hover:text-slate-200 text-lg leading-none transition-colors"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-5 p-4 text-xs text-slate-300">
+          {/* Background + strategy selectors */}
+          <section className="flex flex-col gap-3">
+            <label className="flex flex-col gap-1">
+              <span className="text-slate-400 font-medium uppercase tracking-wider text-[10px]">Background</span>
+              <select
+                value={currentBg?.id ?? ''}
+                onChange={(e) => setBackground(e.target.value)}
+                className="bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-slate-200"
+              >
+                {backgrounds.map((bg) => (
+                  <option key={bg.id} value={bg.id}>{bg.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-slate-400 font-medium uppercase tracking-wider text-[10px]">Strategy</span>
+              <select
+                value={currentStrategy?.id ?? ''}
+                onChange={(e) => setStrategy(e.target.value)}
+                className="bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-slate-200"
+              >
+                {currentBg?.strategies.map((s) => (
+                  <option key={s.id} value={s.id}>{s.label}</option>
+                ))}
+              </select>
+            </label>
+          </section>
+
+          {/* Shared params */}
+          {currentBg && (
+            <section className="flex flex-col gap-3 border-t border-slate-700/50 pt-4">
+              <span className="text-slate-400 font-medium uppercase tracking-wider text-[10px]">Appearance</span>
+              <ParamControls specs={currentBg.sharedParams} values={bgConfig.params} onChange={setParam} />
+            </section>
+          )}
+
+          {/* Strategy params */}
+          {currentStrategy && currentStrategy.params.length > 0 && (
+            <section className="flex flex-col gap-3 border-t border-slate-700/50 pt-4">
+              <span className="text-slate-400 font-medium uppercase tracking-wider text-[10px]">{currentStrategy.label}</span>
+              <ParamControls specs={currentStrategy.params} values={bgConfig.params} onChange={setParam} />
+            </section>
+          )}
         </div>
       </div>
 

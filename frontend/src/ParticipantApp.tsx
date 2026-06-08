@@ -1,6 +1,7 @@
 import { Volume2, VolumeX, Presentation } from 'lucide-react';
 import type { WsState } from './hooks/useWebSocket';
 import { StageRenderer } from './components/StageRenderer';
+import { SlideBackground } from './components/SlideBackground';
 import { presentationSteps, stepHasSound } from './config/presentationConfig';
 import { useSoundContext } from './contexts/SoundContext';
 import { UserSwitcher } from './UserSwitcher';
@@ -19,7 +20,8 @@ export function ParticipantApp({ state, send, myName, myOwner, onToggleDevRole, 
   const step = presentationSteps[state.stepIndex] ?? presentationSteps[0];
   const { muted, toggleMute } = useSoundContext();
   return (
-    <div className="w-screen h-screen bg-slate-950 overflow-hidden relative">
+    <div className="w-screen h-screen bg-slate-950 overflow-hidden relative isolate">
+      <SlideBackground config={state.bgConfig} />
       <StageRenderer wsState={state} send={send} isPresenter={false} myName={myName} myOwner={myOwner} myVotes={myVotes} setMyVote={setMyVote} />
       <div className="absolute top-3 right-4 flex items-center gap-2 z-50">
         {stepHasSound(step) && (

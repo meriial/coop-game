@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { emptyCanvasState, type MatchState, type CanvasState } from '@workshop/protocol';
+import { emptyCanvasState, type MatchState, type CanvasState, type BgConfig } from '@workshop/protocol';
+import '../backgrounds/register';
+import { defaultBgConfig } from '../backgrounds/registry';
 
 export interface ConnectedUser { name: string; color?: string }
 
@@ -12,6 +14,7 @@ export interface WsState {
   games: Record<string, unknown>;
   connectedUsers: ConnectedUser[];
   connected: boolean;
+  bgConfig: BgConfig;
 }
 
 const DEFAULT_STATE: WsState = {
@@ -39,6 +42,7 @@ const DEFAULT_STATE: WsState = {
   },
   connectedUsers: [],
   connected: false,
+  bgConfig: defaultBgConfig(),
 };
 
 type OutgoingMsg = Record<string, unknown> & { type: string };
@@ -108,6 +112,7 @@ export function useWebSocket(url: string, disabled = false) {
               role: (msg.role as 'presenter' | 'participant') ?? 'participant',
               pollResults: (msg.pollResults as Record<string, Record<string, number>>) ?? {},
               pollValues: (msg.pollValues as Record<string, string[]>) ?? {},
+              bgConfig: (msg.bgConfig as BgConfig | null) ?? defaultBgConfig(),
               games: {
                 ...prev.games,
                 'periodic-match': patchPeriodicMatch(msg),
@@ -116,6 +121,8 @@ export function useWebSocket(url: string, disabled = false) {
             };
           case 'SYNC_STEP':
             return { ...prev, stepIndex: msg.stepIndex as number };
+          case 'SYNC_BG':
+            return { ...prev, bgConfig: msg.config as BgConfig };
           case 'POLL_UPDATES': {
             const pollId = msg.pollId as string;
             if (msg.values !== undefined) {

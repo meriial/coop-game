@@ -128,6 +128,20 @@ export interface ConnectedUser {
   color?: string;
 }
 
+/**
+ * Presentation background selection. The server treats this as an opaque blob —
+ * it persists and relays it without knowing the param schemas (those live in the
+ * frontend background registry). The frontend always sends a fully-resolved config.
+ */
+export interface BgConfig {
+  /** Registered background id, e.g. 'shifting-grid'. */
+  backgroundId: string;
+  /** Selected strategy within that background, e.g. 'drift' | 'waves' | 'ripple'. */
+  strategyId: string;
+  /** Resolved shared + strategy param values. */
+  params: Record<string, number | string | boolean>;
+}
+
 export type InboundMsg =
   | { type: 'STEP_CHANGE'; stepIndex: number }
   | { type: 'SUBMIT_VOTE'; pollId: string; choice: string; pollType?: string }
@@ -144,11 +158,13 @@ export type InboundMsg =
   | { type: 'MATCH_SET_SIZE'; count: number }
   | { type: 'MATCH_SET_TIMEOUT'; seconds: number }
   | { type: 'MATCH_SET_CATCHUP'; enabled: boolean }
-  | { type: 'MATCH_SET_SHOW_COOLDOWN'; enabled: boolean };
+  | { type: 'MATCH_SET_SHOW_COOLDOWN'; enabled: boolean }
+  | { type: 'BG_CONFIG'; config: BgConfig };
 
 export type OutboundMsg =
-  | ({ type: 'WELCOME'; stepIndex: number; role: string; pollResults: Record<string, Record<string, number>>; pollValues: Record<string, string[]> } & CanvasState & MatchState)
+  | ({ type: 'WELCOME'; stepIndex: number; role: string; pollResults: Record<string, Record<string, number>>; pollValues: Record<string, string[]>; bgConfig: BgConfig | null } & CanvasState & MatchState)
   | { type: 'SYNC_STEP'; stepIndex: number }
+  | { type: 'SYNC_BG'; config: BgConfig }
   | { type: 'POLL_UPDATES'; pollId: string; results?: Record<string, number>; values?: string[] }
   | { type: 'POLL_RESET'; pollId: string }
   | ({ type: 'SYNC_CANVAS' } & CanvasState)

@@ -1,4 +1,4 @@
-import type { ConnectedUser, OutboundMsg, Player, RoomAttachment } from '@workshop/protocol';
+import type { BgConfig, ConnectedUser, OutboundMsg, Player, RoomAttachment } from '@workshop/protocol';
 import { createGameContext } from '@workshop/game-core/server';
 import { periodicMatchEngine, clearMatchPendingForPlayer } from '@workshop/game-periodic-match/engine';
 import { pixelHeartEngine } from '@workshop/game-pixel-heart/engine';
@@ -122,6 +122,7 @@ export class PresentationRoom {
       ...matchState,
       pollResults: this.buildAllPollResults(),
       pollValues: this.buildAllPollValues(),
+      bgConfig: this.getBgConfig(),
     } satisfies OutboundMsg));
 
     this.broadcastConnectedUsers();
@@ -144,6 +145,14 @@ export class PresentationRoom {
       const idx = Math.max(0, Math.floor(msg.stepIndex as number));
       this.sql.exec(`INSERT OR REPLACE INTO meta VALUES ('stepIndex', ?)`, String(idx));
       this.broadcast({ type: 'SYNC_STEP', stepIndex: idx });
+      return;
+    }
+
+    if (msg.type === 'BG_CONFIG') {
+      if (role !== 'presenter') return;
+      const config = msg.config as BgConfig;
+      this.sql.exec(`INSERT OR REPLACE INTO meta VALUES ('bg_config', ?)`, JSON.stringify(config));
+      this.broadcast({ type: 'SYNC_BG', config });
       return;
     }
 
@@ -331,6 +340,13 @@ export class PresentationRoom {
   private getStepIndex(): number {
     const rows = [...this.sql.exec(`SELECT value FROM meta WHERE key = 'stepIndex'`)];
     return rows.length > 0 ? parseInt(rows[0].value as string, 10) : 0;
+  }
+
+  /** Stored background config, or null so the client falls back to its registry default. */
+  private getBgConfig(): BgConfig | null {
+    const rows = [...this.sql.exec(`SELECT value FROM meta WHERE key = 'bg_config'`)];
+    if (rows.length === 0) return null;
+    try { return JSON.parse(rows[0].value as string) as BgConfig; } catch { return null; }
   }
 
   private getPollResults(pollId: string): Record<string, number> {
