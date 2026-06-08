@@ -125,15 +125,19 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
                   onClick={() => handlePaint(x, y)}
                   className={[
                     'cursor-pointer hover:brightness-150 transition-[filter] duration-75 flex items-center justify-center',
+                    pu ? 'ring-1 ring-inset ring-amber-300/60' : '',
                     isWormCenter ? 'ring-1 ring-inset ring-indigo-400/80' : '',
                     isWormValid ? 'ring-1 ring-inset ring-white/25' : '',
                   ].join(' ')}
-                  style={{ background: color ?? '#0b1220' }}
+                  style={{
+                    background: color ?? '#0b1220',
+                    ...(pu ? { boxShadow: 'inset 0 0 6px 1px rgba(251,191,36,0.22)' } : {}),
+                  }}
                 >
                   {pu && (
                     <span
-                      className="leading-none animate-pulse pointer-events-none"
-                      style={{ fontSize: Math.max(8, Math.floor(cell * 0.7)) }}
+                      className="leading-none animate-pulse pointer-events-none drop-shadow-[0_0_4px_rgba(251,191,36,0.9)]"
+                      style={{ fontSize: Math.max(8, Math.floor(cell * 0.82)) }}
                     >
                       {POWERUP_META[pu].icon}
                     </span>
