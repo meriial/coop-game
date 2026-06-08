@@ -253,6 +253,7 @@ export const periodicMatchEngine: GameEngine<MatchState> = {
   inboundTypes: [
     'MATCH_FLIP', 'MATCH_PAUSE', 'MATCH_RESET', 'MATCH_SET_SIZE', 'MATCH_SET_TIMEOUT',
     'MATCH_SET_CATCHUP', 'MATCH_SET_SHOW_COOLDOWN', 'MATCH_SET_ACTIVE_WINDOW',
+    'MATCH_CLEAR_LEADERBOARD',
   ],
 
   initSchema(ctx) {
@@ -341,6 +342,15 @@ export const periodicMatchEngine: GameEngine<MatchState> = {
     if (msg.type === 'MATCH_SET_ACTIVE_WINDOW') {
       const seconds = Math.min(MAX_ACTIVE_WINDOW_SEC, Math.max(MIN_ACTIVE_WINDOW_SEC, Math.round(msg.seconds as number)));
       ctx.meta.set('match_catchup_active_window_ms', String(seconds * 1000));
+      ctx.broadcast({ type: 'SYNC_MATCH', ...buildMatchState(ctx) });
+    }
+    if (msg.type === 'MATCH_CLEAR_LEADERBOARD') {
+      ctx.sql.exec(`DELETE FROM players`);
+      ctx.sql.exec(`DELETE FROM match_claimed`);
+      ctx.sql.exec(`DELETE FROM match_pending`);
+      ctx.sql.exec(`DELETE FROM match_reveal`);
+      ctx.sql.exec(`DELETE FROM match_activity`);
+      ctx.sql.exec(`DELETE FROM match_cooldown`);
       ctx.broadcast({ type: 'SYNC_MATCH', ...buildMatchState(ctx) });
     }
   },

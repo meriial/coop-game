@@ -161,6 +161,7 @@ export type InboundMsg =
   | { type: 'MATCH_SET_CATCHUP'; enabled: boolean }
   | { type: 'MATCH_SET_SHOW_COOLDOWN'; enabled: boolean }
   | { type: 'MATCH_SET_ACTIVE_WINDOW'; seconds: number }
+  | { type: 'MATCH_CLEAR_LEADERBOARD' }
   | { type: 'BG_CONFIG'; config: BgConfig }
   | { type: 'RELOAD_CLIENTS' };
 

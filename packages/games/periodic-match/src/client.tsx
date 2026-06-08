@@ -236,9 +236,19 @@ export function PeriodicMatch({
       </div>
 
       <div className="w-52 shrink-0 flex flex-col gap-3 p-3 border-l border-slate-800 bg-slate-900/50">
-        <h3 className="text-slate-300 font-semibold text-xs uppercase tracking-wider shrink-0">
-          Leaderboard
-        </h3>
+        <div className="flex items-center justify-between shrink-0">
+          <h3 className="text-slate-300 font-semibold text-xs uppercase tracking-wider">
+            Leaderboard
+          </h3>
+          {isHost && (
+            <button
+              onClick={() => send({ type: 'MATCH_CLEAR_LEADERBOARD' })}
+              className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 hover:bg-red-700 text-slate-400 hover:text-white transition-colors"
+            >
+              Clear
+            </button>
+          )}
+        </div>
         <div className="flex-1 flex flex-col gap-1 overflow-y-auto min-h-0">
           {matchScores.length === 0 ? (
             <p className="text-slate-600 text-xs">No players yet</p>
