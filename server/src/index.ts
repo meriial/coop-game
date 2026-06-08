@@ -354,9 +354,9 @@ async function handleGuestInvite(request: Request, env: Env): Promise<Response> 
   try {
     await makeAdapter(env).send({
       to: guestEmail,
-      subject: "You're invited to the DrugBank AI Workshop",
+      subject: "You're invited to play at Ideometer",
       html: `<p>Hi ${guestName},</p>
-<p>You've been invited to join the workshop. Click the link below — no setup required:</p>
+<p>You're invited to play at Ideometer. Click the link below — no setup required:</p>
 <p><a href="${inviteLink}" style="font-size:1.2em">Join the Workshop →</a></p>
 <p style="color:#666;font-size:0.85em">This link is personal to you and valid for 7 days.</p>`,
       link: inviteLink,

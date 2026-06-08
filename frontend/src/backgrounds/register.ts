@@ -2,5 +2,7 @@
 // registry is read (useWebSocket imports this so defaults resolve at startup).
 import { register } from './registry';
 import { shiftingGrid } from './shifting-grid';
+import { sparkles } from './sparkles';
 
 register(shiftingGrid);
+register(sparkles);

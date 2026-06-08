@@ -462,9 +462,17 @@ function resetCanvas(ctx: GameContext): void {
   ctx.sql.exec(`DELETE FROM meta WHERE key IN ('paint_last_spawn_ms', 'paint_count_since_spawn')`);
 }
 
+function clearPlayers(ctx: GameContext): void {
+  ctx.sql.exec(`DELETE FROM players`);
+  ctx.sql.exec(`DELETE FROM paint_effects`);
+  ctx.sql.exec(`DELETE FROM paint_cooldown`);
+  ctx.sql.exec(`DELETE FROM paint_worm_last`);
+  ctx.sql.exec(`DELETE FROM paint_powerup_claims`);
+}
+
 export const pixelHeartEngine: GameEngine<CanvasState> = {
   id: 'pixel-heart',
-  inboundTypes: ['GAME_PAINT', 'GAME_PAINT_PATH', 'GAME_CONFIG', 'GAME_RESET', 'GAME_DROP_POWERUP'],
+  inboundTypes: ['GAME_PAINT', 'GAME_PAINT_PATH', 'GAME_CONFIG', 'GAME_RESET', 'GAME_DROP_POWERUP', 'GAME_CLEAR_PLAYERS'],
 
   initSchema(ctx) {
     ctx.sql.exec(`
@@ -545,6 +553,12 @@ export const pixelHeartEngine: GameEngine<CanvasState> = {
         ctx.meta.set('paint_last_spawn_ms', String(now));
         ctx.meta.set('paint_count_since_spawn', '0');
       }
+      ctx.broadcast({ type: 'SYNC_CANVAS', ...buildCanvasState(ctx) });
+      return;
+    }
+
+    if (msg.type === 'GAME_CLEAR_PLAYERS') {
+      clearPlayers(ctx);
       ctx.broadcast({ type: 'SYNC_CANVAS', ...buildCanvasState(ctx) });
     }
   },

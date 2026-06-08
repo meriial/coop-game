@@ -49,6 +49,7 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
 
   const handlePaint = (x: number, y: number) => send({ type: 'GAME_PAINT', x, y, opacity: paintOpacity });
   const handleReset = () => send({ type: 'GAME_RESET' });
+  const handleClearPlayers = () => send({ type: 'GAME_CLEAR_PLAYERS' });
   const setConfig = (patch: Record<string, unknown>) => send({ type: 'GAME_CONFIG', config: patch });
   const handleDropPowerup = () => send({ type: 'GAME_DROP_POWERUP' });
 
@@ -333,12 +334,18 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
               </section>
 
               {/* Danger */}
-              <section className="border-t border-slate-700/50 pt-4">
+              <section className="flex flex-col gap-2 border-t border-slate-700/50 pt-4">
                 <button
                   onClick={() => { handleReset(); setShowDrawer(false); }}
                   className="w-full py-1.5 rounded-lg bg-red-900/60 hover:bg-red-800/70 border border-red-700/50 text-red-300 text-xs transition-colors"
                 >
                   Reset canvas
+                </button>
+                <button
+                  onClick={() => { handleClearPlayers(); setShowDrawer(false); }}
+                  className="w-full py-1.5 rounded-lg bg-red-900/60 hover:bg-red-800/70 border border-red-700/50 text-red-300 text-xs transition-colors"
+                >
+                  Clear player list
                 </button>
               </section>
             </div>

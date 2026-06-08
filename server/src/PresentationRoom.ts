@@ -16,6 +16,7 @@ const PRESENTER_ONLY_GAME_TYPES = new Set([
   'GAME_RESET',
   'GAME_CONFIG',
   'GAME_DROP_POWERUP',
+  'GAME_CLEAR_PLAYERS',
   'MATCH_PAUSE',
   'MATCH_RESET',
   'MATCH_SET_SIZE',
@@ -204,6 +205,10 @@ export class PresentationRoom {
         isAgent: Boolean(attachment.isAgent),
         agentLabel: attachment.agentLabel,
       };
+    } else if (!player && !PRESENTER_ONLY_GAME_TYPES.has(msg.type)) {
+      // Player was cleared but is still connected — re-register on first action.
+      player = this.upsertPlayer(attachment, attachment.name);
+      this.broadcastConnectedUsers();
     }
     if (!player) return;
 
