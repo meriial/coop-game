@@ -18,6 +18,7 @@ const EMPTY_MATCH: PeriodicMatchState = {
   catchUpEnabled: false,
   showCooldown: false,
   matchCooldowns: {},
+  catchupActiveWindowMs: 30000,
 };
 
 clientGameRegistry.register<PeriodicMatchState>({

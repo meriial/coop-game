@@ -155,7 +155,7 @@ function writeCell(
     } else {
       r = incoming.r; g = incoming.g; b = incoming.b;
     }
-    a = 1;
+    a = weight;
   } else if (!existing) {
     // Empty neighbour becomes the incoming color at partial alpha — the
     // "half-transparent" look when painting onto bare canvas.
@@ -260,7 +260,7 @@ function maybeSpawnPowerup(ctx: GameContext, cfg: PaintConfig, now: number): voi
 
 // Applies a single paint (center + spread) and any side effects. Caller is
 // responsible for cooldown gating and broadcasting.
-function applyPaint(ctx: GameContext, player: Player, x: number, y: number, cfg: PaintConfig, now: number): boolean {
+function applyPaint(ctx: GameContext, player: Player, x: number, y: number, cfg: PaintConfig, now: number, opacity = 1): boolean {
   if (x < 0 || x >= cfg.cols || y < 0 || y >= cfg.rows) return false;
 
   // Worm mode: each paint must be within Chebyshev distance 1 of the player's last paint.
@@ -288,7 +288,7 @@ function applyPaint(ctx: GameContext, player: Player, x: number, y: number, cfg:
     if (effect.kind === 'prism') rgb = prismRgb(effect.charges);
   }
 
-  writeCell(ctx, x, y, rgb, 1, true, additive, player.id);
+  writeCell(ctx, x, y, rgb, opacity, true, additive, player.id);
   for (let dy = -radius; dy <= radius; dy++) {
     for (let dx = -radius; dx <= radius; dx++) {
       if (dx === 0 && dy === 0) continue;
@@ -296,7 +296,7 @@ function applyPaint(ctx: GameContext, player: Player, x: number, y: number, cfg:
       const ny = y + dy;
       if (nx < 0 || nx >= cfg.cols || ny < 0 || ny >= cfg.rows) continue;
       const cheb = Math.max(Math.abs(dx), Math.abs(dy));
-      const weight = cheb === 1 ? mix : mix * 0.5;
+      const weight = (cheb === 1 ? mix : mix * 0.5) * opacity;
       writeCell(ctx, nx, ny, rgb, weight, false, additive, player.id);
     }
   }
@@ -492,7 +492,10 @@ export const pixelHeartEngine: GameEngine<CanvasState> = {
       if (withinCooldown(ctx, player.id, now, cfg.cooldownMs)) return;
       const x = Math.floor(msg.x as number);
       const y = Math.floor(msg.y as number);
-      const changed = applyPaint(ctx, player, x, y, cfg, now);
+      const rawOpacity = typeof msg.opacity === 'number' ? msg.opacity : 1;
+      const opacity = [0.25, 0.5, 0.75, 1.0].reduce((best, v) =>
+        Math.abs(v - rawOpacity) < Math.abs(best - rawOpacity) ? v : best, 1.0);
+      const changed = applyPaint(ctx, player, x, y, cfg, now, opacity);
       if (!changed) return;
       stampCooldown(ctx, player.id, now);
       ctx.broadcast({ type: 'SYNC_CANVAS', ...buildCanvasState(ctx) });

@@ -38,6 +38,7 @@ const DEFAULT_STATE: WsState = {
       catchUpEnabled: false,
       showCooldown: false,
       matchCooldowns: {},
+      catchupActiveWindowMs: 30000,
     } satisfies MatchState,
   },
   connectedUsers: [],
@@ -61,6 +62,7 @@ function patchPeriodicMatch(msg: Record<string, unknown>): MatchState {
     catchUpEnabled: (msg.catchUpEnabled as boolean) ?? false,
     showCooldown: (msg.showCooldown as boolean) ?? false,
     matchCooldowns: (msg.matchCooldowns as Record<string, number>) ?? {},
+    catchupActiveWindowMs: (msg.catchupActiveWindowMs as number) ?? 30000,
   };
 }
 

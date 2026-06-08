@@ -54,6 +54,7 @@ export class PresentationClient {
     catchUpEnabled: false,
     showCooldown: false,
     matchCooldowns: {},
+    catchupActiveWindowMs: 30000,
   };
   private pixelHeart: CanvasState = emptyCanvasState();
   private identity: AgentIdentity = { name: 'Guest', ownerId: '', isAgent: false };
@@ -185,6 +186,7 @@ export class PresentationClient {
           catchUpEnabled: msg.catchUpEnabled,
           showCooldown: msg.showCooldown,
           matchCooldowns: msg.matchCooldowns,
+          catchupActiveWindowMs: msg.catchupActiveWindowMs ?? 30000,
         };
         this.pixelHeart = extractCanvasState(msg);
         this.bump();
@@ -207,6 +209,7 @@ export class PresentationClient {
           catchUpEnabled: msg.catchUpEnabled,
           showCooldown: msg.showCooldown,
           matchCooldowns: msg.matchCooldowns,
+          catchupActiveWindowMs: msg.catchupActiveWindowMs ?? 30000,
         };
         this.bump();
         break;

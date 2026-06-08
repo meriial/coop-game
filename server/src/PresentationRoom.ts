@@ -22,6 +22,7 @@ const PRESENTER_ONLY_GAME_TYPES = new Set([
   'MATCH_SET_TIMEOUT',
   'MATCH_SET_CATCHUP',
   'MATCH_SET_SHOW_COOLDOWN',
+  'MATCH_SET_ACTIVE_WINDOW',
 ]);
 
 type InboundMsg = { type: string; [key: string]: unknown };

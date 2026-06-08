@@ -18,8 +18,11 @@ const MIN_PENDING_TIMEOUT_SEC = 1;
 const MAX_PENDING_TIMEOUT_SEC = 60;
 const REVEAL_DURATION_MS = 1000;
 
-// Catch-up rule constants — change these to tune the mechanic.
-const CATCHUP_ACTIVE_WINDOW_MS = 20_000;
+const DEFAULT_ACTIVE_WINDOW_MS = 30_000;
+const MIN_ACTIVE_WINDOW_SEC = 5;
+const MAX_ACTIVE_WINDOW_SEC = 120;
+// Catch-up cooldown bounds (ms).
+const CATCHUP_MIN_COOLDOWN_MS = 1_000;
 const CATCHUP_MAX_COOLDOWN_MS = 5_000;
 
 function getPendingTimeoutMs(ctx: GameContext): number {
@@ -29,15 +32,26 @@ function getPendingTimeoutMs(ctx: GameContext): number {
   return Number.isFinite(parsed) ? parsed : DEFAULT_PENDING_TIMEOUT_MS;
 }
 
-// Returns the cooldown in ms to impose on a leader under catch-up mode.
-// activePairs: all active players' pair counts (including the current player).
+function getActiveWindowMs(ctx: GameContext): number {
+  const raw = ctx.meta.get('match_catchup_active_window_ms');
+  if (!raw) return DEFAULT_ACTIVE_WINDOW_MS;
+  const parsed = parseInt(raw, 10);
+  return Number.isFinite(parsed) ? parsed : DEFAULT_ACTIVE_WINDOW_MS;
+}
+
+// Returns the catch-up cooldown for a single player given all active players' pair counts.
+// All active players receive a cooldown proportional to their advantage over last-place.
+// The max cooldown scales with the actual spread (1s per pair gap, capped at 5s),
+// so players who are all close together get small cooldowns.
 function catchupCooldownMs(myPairs: number, activePairs: number[]): number {
-  if (activePairs.length === 0) return 0;
+  if (activePairs.length < 2) return 0;
   const lowestPairs = Math.min(...activePairs);
   const leaderPairs = Math.max(...activePairs);
-  if (leaderPairs === 0) return 0;
-  const gap = Math.max(0, myPairs - lowestPairs);
-  return Math.min(CATCHUP_MAX_COOLDOWN_MS, (gap / leaderPairs) * CATCHUP_MAX_COOLDOWN_MS);
+  const spread = leaderPairs - lowestPairs;
+  if (spread === 0) return 0;
+  const scaledMax = Math.min(CATCHUP_MAX_COOLDOWN_MS, Math.max(CATCHUP_MIN_COOLDOWN_MS, spread * 1_000));
+  const normPos = (myPairs - lowestPairs) / spread;
+  return Math.round(CATCHUP_MIN_COOLDOWN_MS + normPos * (scaledMax - CATCHUP_MIN_COOLDOWN_MS));
 }
 
 // Reschedules the durable-object alarm to the earliest expiry across pending tiles,
@@ -143,6 +157,7 @@ function buildMatchState(ctx: GameContext): MatchState {
     catchUpEnabled,
     showCooldown,
     matchCooldowns,
+    catchupActiveWindowMs: getActiveWindowMs(ctx),
   };
 }
 
@@ -203,9 +218,9 @@ async function handleFlip(player: Player, pos: number, ctx: GameContext): Promis
       ctx.sql.exec(`INSERT OR REPLACE INTO match_reveal VALUES (?, ?, ?, ?)`, firstPos, playerColor, expiry, playerKey);
     }
 
-    // Apply catch-up cooldown after a completed pair attempt (match or mismatch).
+    // Apply catch-up cooldowns to ALL active players after each completed pair attempt.
     if (ctx.meta.get('match_catchup_enabled') === 'true') {
-      const activeWindow = now - CATCHUP_ACTIVE_WINDOW_MS;
+      const activeWindow = now - getActiveWindowMs(ctx);
       const activeRows = [...ctx.sql.exec(`
         SELECT p.id, COUNT(mc.pos) as cnt
         FROM players p
@@ -214,14 +229,15 @@ async function handleFlip(player: Player, pos: number, ctx: GameContext): Promis
         GROUP BY p.id
       `, activeWindow)];
       const activePairs = activeRows.map((r) => Math.floor((r.cnt as number) / 2));
-      const myRow = activeRows.find((r) => r.id === playerKey);
-      const myPairs = myRow ? Math.floor((myRow.cnt as number) / 2) : 0;
-      const cooldown = catchupCooldownMs(myPairs, activePairs);
-      if (cooldown > 0) {
-        ctx.sql.exec(
-          `INSERT OR REPLACE INTO match_cooldown (player_key, cooldown_until_ms) VALUES (?, ?)`,
-          playerKey, now + cooldown,
-        );
+      for (const row of activeRows) {
+        const pPairs = Math.floor((row.cnt as number) / 2);
+        const cooldown = catchupCooldownMs(pPairs, activePairs);
+        if (cooldown > 0) {
+          ctx.sql.exec(
+            `INSERT OR REPLACE INTO match_cooldown (player_key, cooldown_until_ms) VALUES (?, ?)`,
+            row.id, now + cooldown,
+          );
+        }
       }
     }
 
@@ -236,7 +252,7 @@ export const periodicMatchEngine: GameEngine<MatchState> = {
   config: { maxAgentsPerOwner: 1 },
   inboundTypes: [
     'MATCH_FLIP', 'MATCH_PAUSE', 'MATCH_RESET', 'MATCH_SET_SIZE', 'MATCH_SET_TIMEOUT',
-    'MATCH_SET_CATCHUP', 'MATCH_SET_SHOW_COOLDOWN',
+    'MATCH_SET_CATCHUP', 'MATCH_SET_SHOW_COOLDOWN', 'MATCH_SET_ACTIVE_WINDOW',
   ],
 
   initSchema(ctx) {
@@ -319,6 +335,12 @@ export const periodicMatchEngine: GameEngine<MatchState> = {
     }
     if (msg.type === 'MATCH_SET_SHOW_COOLDOWN') {
       ctx.meta.set('match_show_cooldown', msg.enabled ? 'true' : 'false');
+      ctx.broadcast({ type: 'SYNC_MATCH', ...buildMatchState(ctx) });
+      return;
+    }
+    if (msg.type === 'MATCH_SET_ACTIVE_WINDOW') {
+      const seconds = Math.min(MAX_ACTIVE_WINDOW_SEC, Math.max(MIN_ACTIVE_WINDOW_SEC, Math.round(msg.seconds as number)));
+      ctx.meta.set('match_catchup_active_window_ms', String(seconds * 1000));
       ctx.broadcast({ type: 'SYNC_MATCH', ...buildMatchState(ctx) });
     }
   },

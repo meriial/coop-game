@@ -28,6 +28,7 @@ export interface MatchState {
   showCooldown: boolean;
   /** player_key → absolute timestamp (ms) when cooldown expires */
   matchCooldowns: Record<string, number>;
+  catchupActiveWindowMs: number;
 }
 
 /** Power-up effects double as blend modes that change how the next few paints behave. */
@@ -147,7 +148,7 @@ export type InboundMsg =
   | { type: 'SUBMIT_VOTE'; pollId: string; choice: string; pollType?: string }
   | { type: 'RESET_POLL'; pollId: string }
   | { type: 'GAME_JOIN'; name: string }
-  | { type: 'GAME_PAINT'; x: number; y: number }
+  | { type: 'GAME_PAINT'; x: number; y: number; opacity?: number }
   | { type: 'GAME_PAINT_PATH'; cells: { x: number; y: number }[] }
   | { type: 'GAME_CONFIG'; config: Partial<PaintConfig> }
   | { type: 'GAME_RESET' }
@@ -159,6 +160,7 @@ export type InboundMsg =
   | { type: 'MATCH_SET_TIMEOUT'; seconds: number }
   | { type: 'MATCH_SET_CATCHUP'; enabled: boolean }
   | { type: 'MATCH_SET_SHOW_COOLDOWN'; enabled: boolean }
+  | { type: 'MATCH_SET_ACTIVE_WINDOW'; seconds: number }
   | { type: 'BG_CONFIG'; config: BgConfig }
   | { type: 'RELOAD_CLIENTS' };
 

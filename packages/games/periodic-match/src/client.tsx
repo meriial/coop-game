@@ -39,6 +39,7 @@ export function PeriodicMatch({
     catchUpEnabled,
     showCooldown,
     matchCooldowns,
+    catchupActiveWindowMs,
   } = state;
 
   const gridRef = useRef<HTMLDivElement>(null);
@@ -353,9 +354,22 @@ export function PeriodicMatch({
                 />
                 <span className="flex flex-col gap-0.5">
                   <span className="text-slate-300 text-xs">Catch-up</span>
-                  <span className="text-slate-600 text-[10px]">Leaders get longer cooldowns</span>
+                  <span className="text-slate-600 text-[10px]">All players get cooldowns proportional to their lead</span>
                 </span>
               </label>
+              {catchUpEnabled && (
+                <label className="flex flex-col gap-1 pl-5">
+                  <span className="text-slate-400 text-[10px]">Active window: {catchupActiveWindowMs / 1000}s</span>
+                  <input
+                    type="range"
+                    min={5}
+                    max={120}
+                    step={5}
+                    value={catchupActiveWindowMs / 1000}
+                    onChange={(e) => send({ type: 'MATCH_SET_ACTIVE_WINDOW', seconds: Number(e.target.value) })}
+                  />
+                </label>
+              )}
               <label className="flex items-start gap-2 cursor-pointer">
                 <input
                   type="checkbox"

@@ -41,12 +41,13 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
   const { cols, rows, canvas, config } = state;
   const { wrapRef, cell } = useBoardSize(cols, rows);
   const [showDrawer, setShowDrawer] = useState(false);
+  const [paintOpacity, setPaintOpacity] = useState(1.0);
 
   useEffect(() => {
     send({ type: 'GAME_JOIN', name: myName });
   }, [send, myName]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handlePaint = (x: number, y: number) => send({ type: 'GAME_PAINT', x, y });
+  const handlePaint = (x: number, y: number) => send({ type: 'GAME_PAINT', x, y, opacity: paintOpacity });
   const handleReset = () => send({ type: 'GAME_RESET' });
   const setConfig = (patch: Record<string, unknown>) => send({ type: 'GAME_CONFIG', config: patch });
   const handleDropPowerup = () => send({ type: 'GAME_DROP_POWERUP' });
@@ -75,8 +76,8 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
   const boardH = cell * rows + GAP * (rows - 1);
 
   return (
-    <div className="flex flex-col w-full h-full max-w-5xl mx-auto px-4 py-4 gap-3">
-      <div className="flex items-center justify-between flex-wrap gap-2">
+    <div className="flex flex-col w-full h-full py-2 gap-2">
+      <div className="flex items-center justify-between flex-wrap gap-2 px-4">
         <h2 className="text-white text-xl font-bold">Co-op Canvas</h2>
         <div className="flex items-center gap-4 text-sm">
           <span className="text-slate-400">{state.progress}% covered</span>
@@ -93,14 +94,33 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
         </div>
       </div>
 
-      {myEffect && (
-        <div className="flex items-center gap-2 self-start bg-indigo-900/40 border border-indigo-500/50 rounded-full px-3 py-1 text-sm">
-          <span className="text-lg leading-none">{POWERUP_META[myEffect.kind].icon}</span>
-          <span className="text-indigo-200 font-semibold">{POWERUP_META[myEffect.kind].label}</span>
-          <span className="text-indigo-300/80">x{myEffect.charges} left</span>
-          <span className="text-indigo-300/60 hidden sm:inline">{'—'} {POWERUP_META[myEffect.kind].blurb}</span>
+      <div className="flex items-center justify-between flex-wrap gap-2 px-4">
+        {myEffect ? (
+          <div className="flex items-center gap-2 bg-indigo-900/40 border border-indigo-500/50 rounded-full px-3 py-1 text-sm">
+            <span className="text-lg leading-none">{POWERUP_META[myEffect.kind].icon}</span>
+            <span className="text-indigo-200 font-semibold">{POWERUP_META[myEffect.kind].label}</span>
+            <span className="text-indigo-300/80">x{myEffect.charges} left</span>
+            <span className="text-indigo-300/60 hidden sm:inline">{'—'} {POWERUP_META[myEffect.kind].blurb}</span>
+          </div>
+        ) : <div />}
+        <div className="flex items-center gap-1">
+          <span className="text-slate-500 text-xs mr-1">Opacity</span>
+          {([1.0, 0.75, 0.5, 0.25] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setPaintOpacity(v)}
+              className={[
+                'w-7 h-7 rounded text-xs font-medium border transition-colors',
+                paintOpacity === v
+                  ? 'bg-indigo-600 border-indigo-500 text-white'
+                  : 'bg-slate-800 border-slate-600 text-slate-400 hover:border-slate-500',
+              ].join(' ')}
+            >
+              {v * 100}
+            </button>
+          ))}
         </div>
-      )}
+      </div>
 
       <div ref={wrapRef} className="flex-1 min-h-0 w-full flex items-center justify-center">
         <div
@@ -149,7 +169,7 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2 px-4">
         {players.map((p) => {
           const eff = state.effects[p.id];
           const isMe = p.name === myName;
@@ -173,15 +193,17 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
         })}
       </div>
 
-      {config.powerupsEnabled && config.powerupMax > 0 && state.powerups.length >= config.powerupMax ? (
-        <p className="text-amber-500/80 text-xs text-center">Power-up slots full</p>
-      ) : state.paintsUntilNextPowerup !== null ? (
-        <p className="text-slate-500 text-xs text-center">
-          Next power-up in{' '}
-          <span className="text-amber-400 font-semibold">{state.paintsUntilNextPowerup}</span>{' '}
-          paint{state.paintsUntilNextPowerup !== 1 ? 's' : ''}
-        </p>
-      ) : null}
+      <div className="px-4">
+        {config.powerupsEnabled && config.powerupMax > 0 && state.powerups.length >= config.powerupMax ? (
+          <p className="text-amber-500/80 text-xs text-center">Power-up slots full</p>
+        ) : state.paintsUntilNextPowerup !== null ? (
+          <p className="text-slate-500 text-xs text-center">
+            Next power-up in{' '}
+            <span className="text-amber-400 font-semibold">{state.paintsUntilNextPowerup}</span>{' '}
+            paint{state.paintsUntilNextPowerup !== 1 ? 's' : ''}
+          </p>
+        ) : null}
+      </div>
 
       {/* Admin drawer — presenter only */}
       {isHost && (
