@@ -66,6 +66,10 @@ export interface PaintConfig {
   powerupMode: 'time' | 'count';
   /** Paints per player before a power-up drops (used when powerupMode === 'count'). */
   powerupPaintsPerPlayer: number;
+  /** 'random': server assigns colors; 'pick': players choose their own color. */
+  colorMode: 'random' | 'pick';
+  /** Allowed hex colors when colorMode === 'pick'. Empty = any color. */
+  colorPalette: string[];
 }
 
 export const DEFAULT_PAINT_CONFIG: PaintConfig = {
@@ -80,6 +84,8 @@ export const DEFAULT_PAINT_CONFIG: PaintConfig = {
   wormMode: false,
   powerupMode: 'count',
   powerupPaintsPerPlayer: 3,
+  colorMode: 'random',
+  colorPalette: [],
 };
 
 export interface CanvasState {
@@ -102,6 +108,16 @@ export interface CanvasState {
   wormLastPaints: Record<string, { x: number; y: number }>;
   /** Paints remaining until the next power-up drops (count mode only), or null. */
   paintsUntilNextPowerup: number | null;
+  /** Active painting prompt, or null when no round is set up. */
+  prompt: string | null;
+  /** Round lifecycle: idle → painting → judging → reveal. */
+  phase: 'idle' | 'painting' | 'judging' | 'reveal';
+  /** Epoch ms when the current painting round ends, or null. */
+  roundEndMs: number | null;
+  /** Judge score 1–10, set after judging. */
+  score: number | null;
+  /** One-sentence judge commentary, set after judging. */
+  commentary: string | null;
 }
 
 export function emptyCanvasState(
@@ -121,6 +137,11 @@ export function emptyCanvasState(
     config: { ...DEFAULT_PAINT_CONFIG, cols, rows },
     wormLastPaints: {},
     paintsUntilNextPowerup: null,
+    prompt: null,
+    phase: 'idle',
+    roundEndMs: null,
+    score: null,
+    commentary: null,
   };
 }
 
@@ -153,6 +174,12 @@ export type InboundMsg =
   | { type: 'GAME_CONFIG'; config: Partial<PaintConfig> }
   | { type: 'GAME_RESET' }
   | { type: 'GAME_DROP_POWERUP' }
+  | { type: 'GAME_SET_COLOR'; color: string }
+  | { type: 'GAME_WORM_MOVE'; x: number; y: number }
+  | { type: 'GAME_SET_PROMPT'; prompt: string }
+  | { type: 'GAME_START_ROUND'; durationMs: number }
+  | { type: 'GAME_END_ROUND' }
+  | { type: 'GAME_SET_SCORE'; score: number; commentary: string }
   | { type: 'MATCH_FLIP'; pos: number }
   | { type: 'MATCH_PAUSE' }
   | { type: 'MATCH_RESET' }

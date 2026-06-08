@@ -58,6 +58,13 @@ function getConfig(ctx: GameContext): PaintConfig {
     powerupModeRaw === 'count' ? 'count'
     : powerupModeRaw === 'time' ? 'time'
     : DEFAULT_PAINT_CONFIG.powerupMode;
+  const colorModeRaw = ctx.meta.get('paint_color_mode');
+  const colorMode: PaintConfig['colorMode'] = colorModeRaw === 'pick' ? 'pick' : 'random';
+  let colorPalette: string[] = [];
+  const colorPaletteRaw = ctx.meta.get('paint_color_palette');
+  if (colorPaletteRaw) {
+    try { colorPalette = JSON.parse(colorPaletteRaw) as string[]; } catch { colorPalette = []; }
+  }
   return {
     cols: num('paint_cols', DEFAULT_PAINT_CONFIG.cols),
     rows: num('paint_rows', DEFAULT_PAINT_CONFIG.rows),
@@ -70,6 +77,8 @@ function getConfig(ctx: GameContext): PaintConfig {
     wormMode: bool('paint_worm_mode', DEFAULT_PAINT_CONFIG.wormMode),
     powerupMode,
     powerupPaintsPerPlayer: num('paint_powerup_paints_per_player', DEFAULT_PAINT_CONFIG.powerupPaintsPerPlayer),
+    colorMode,
+    colorPalette,
   };
 }
 
@@ -422,10 +431,24 @@ function buildCanvasState(ctx: GameContext): CanvasState {
     }
   }
 
+  const prompt = ctx.meta.get('game_prompt') || null;
+  const phaseRaw = ctx.meta.get('game_phase');
+  const phase: CanvasState['phase'] =
+    phaseRaw === 'painting' ? 'painting'
+    : phaseRaw === 'judging' ? 'judging'
+    : phaseRaw === 'reveal' ? 'reveal'
+    : 'idle';
+  const roundEndMsRaw = ctx.meta.get('game_round_end_ms');
+  const roundEndMs = roundEndMsRaw ? Number(roundEndMsRaw) : null;
+  const scoreRaw = ctx.meta.get('game_score');
+  const score = scoreRaw ? Number(scoreRaw) : null;
+  const commentary = ctx.meta.get('game_commentary') || null;
+
   return {
     canvas, cols: cfg.cols, rows: cfg.rows, progress, harmony,
     players, powerups, effects, claims, config: cfg,
     wormLastPaints, paintsUntilNextPowerup,
+    prompt, phase, roundEndMs, score, commentary,
   };
 }
 
@@ -444,6 +467,13 @@ function applyConfig(ctx: GameContext, partial: Record<string, unknown>): void {
   if ('wormMode' in partial) ctx.meta.set('paint_worm_mode', partial.wormMode ? 'true' : 'false');
   if ('powerupMode' in partial) ctx.meta.set('paint_powerup_mode', partial.powerupMode === 'count' ? 'count' : 'time');
   if ('powerupPaintsPerPlayer' in partial) ctx.meta.set('paint_powerup_paints_per_player', String(clampInt(partial.powerupPaintsPerPlayer, 1, 100, DEFAULT_PAINT_CONFIG.powerupPaintsPerPlayer)));
+  if ('colorMode' in partial) ctx.meta.set('paint_color_mode', partial.colorMode === 'pick' ? 'pick' : 'random');
+  if ('colorPalette' in partial && Array.isArray(partial.colorPalette)) {
+    const palette = (partial.colorPalette as unknown[]).filter(
+      (c): c is string => typeof c === 'string' && /^#[0-9a-fA-F]{6}$/i.test(c),
+    );
+    ctx.meta.set('paint_color_palette', JSON.stringify(palette));
+  }
 
   // Drop anything that fell outside the (possibly shrunk) grid.
   const cfg = getConfig(ctx);
@@ -472,7 +502,11 @@ function clearPlayers(ctx: GameContext): void {
 
 export const pixelHeartEngine: GameEngine<CanvasState> = {
   id: 'pixel-heart',
-  inboundTypes: ['GAME_PAINT', 'GAME_PAINT_PATH', 'GAME_CONFIG', 'GAME_RESET', 'GAME_DROP_POWERUP', 'GAME_CLEAR_PLAYERS'],
+  inboundTypes: [
+    'GAME_PAINT', 'GAME_PAINT_PATH', 'GAME_CONFIG', 'GAME_RESET', 'GAME_DROP_POWERUP', 'GAME_CLEAR_PLAYERS',
+    'GAME_SET_COLOR', 'GAME_WORM_MOVE',
+    'GAME_SET_PROMPT', 'GAME_START_ROUND', 'GAME_END_ROUND', 'GAME_SET_SCORE',
+  ],
 
   initSchema(ctx) {
     ctx.sql.exec(`
@@ -560,6 +594,75 @@ export const pixelHeartEngine: GameEngine<CanvasState> = {
     if (msg.type === 'GAME_CLEAR_PLAYERS') {
       clearPlayers(ctx);
       ctx.broadcast({ type: 'SYNC_CANVAS', ...buildCanvasState(ctx) });
+      return;
+    }
+
+    if (msg.type === 'GAME_SET_COLOR') {
+      const cfg = getConfig(ctx);
+      if (cfg.colorMode !== 'pick') return;
+      const color = String(msg.color ?? '');
+      if (!/^#[0-9a-fA-F]{6}$/i.test(color)) return;
+      if (cfg.colorPalette.length > 0 && !cfg.colorPalette.map((c) => c.toUpperCase()).includes(color.toUpperCase())) return;
+      ctx.sql.exec(`UPDATE players SET color = ? WHERE id = ?`, color, player.id);
+      ctx.broadcast({ type: 'SYNC_CANVAS', ...buildCanvasState(ctx) });
+      return;
+    }
+
+    if (msg.type === 'GAME_WORM_MOVE') {
+      const cfg = getConfig(ctx);
+      if (!cfg.wormMode) return;
+      const x = Math.floor(Number(msg.x));
+      const y = Math.floor(Number(msg.y));
+      if (x < 0 || x >= cfg.cols || y < 0 || y >= cfg.rows) return;
+      const lastRow = [...ctx.sql.exec(`SELECT x, y FROM paint_worm_last WHERE player_key = ?`, player.id)];
+      if (lastRow.length > 0) {
+        const prevX = lastRow[0].x as number;
+        const prevY = lastRow[0].y as number;
+        if (x === prevX && y === prevY) return;
+        const dx = Math.abs(x - prevX);
+        const dy = Math.abs(y - prevY);
+        if (Math.max(dx, dy) > 1) return;
+      }
+      ctx.sql.exec(`INSERT OR REPLACE INTO paint_worm_last (player_key, x, y) VALUES (?, ?, ?)`, player.id, x, y);
+      ctx.broadcast({ type: 'SYNC_CANVAS', ...buildCanvasState(ctx) });
+      return;
+    }
+
+    if (msg.type === 'GAME_SET_PROMPT') {
+      const prompt = String(msg.prompt ?? '').slice(0, 500);
+      ctx.meta.set('game_prompt', prompt);
+      ctx.meta.set('game_phase', 'idle');
+      ctx.meta.set('game_round_end_ms', '');
+      ctx.meta.set('game_score', '');
+      ctx.meta.set('game_commentary', '');
+      ctx.broadcast({ type: 'SYNC_CANVAS', ...buildCanvasState(ctx) });
+      return;
+    }
+
+    if (msg.type === 'GAME_START_ROUND') {
+      const durationMs = Math.max(30_000, Math.min(Number(msg.durationMs) || 180_000, 600_000));
+      ctx.meta.set('game_phase', 'painting');
+      ctx.meta.set('game_round_end_ms', String(Date.now() + durationMs));
+      ctx.meta.set('game_score', '');
+      ctx.meta.set('game_commentary', '');
+      ctx.broadcast({ type: 'SYNC_CANVAS', ...buildCanvasState(ctx) });
+      return;
+    }
+
+    if (msg.type === 'GAME_END_ROUND') {
+      ctx.meta.set('game_phase', 'judging');
+      ctx.broadcast({ type: 'SYNC_CANVAS', ...buildCanvasState(ctx) });
+      return;
+    }
+
+    if (msg.type === 'GAME_SET_SCORE') {
+      const score = Math.max(1, Math.min(10, Math.round(Number(msg.score) || 5)));
+      const commentary = String(msg.commentary ?? '').slice(0, 500);
+      ctx.meta.set('game_score', String(score));
+      ctx.meta.set('game_commentary', commentary);
+      ctx.meta.set('game_phase', 'reveal');
+      ctx.broadcast({ type: 'SYNC_CANVAS', ...buildCanvasState(ctx) });
+      return;
     }
   },
 

@@ -3,6 +3,7 @@ import type { GameComponentProps } from '@workshop/game-core/client';
 import type { PowerUpKind } from '@workshop/protocol';
 import type { PixelHeartState } from './types';
 import { CanvasGridControls } from './GridControls';
+import { PALETTES } from './palettes';
 
 const GAP = 1;
 
@@ -37,11 +38,100 @@ function useBoardSize(cols: number, rows: number) {
   return { wrapRef, cell };
 }
 
+function canvasToDataURL(canvasData: (string | null)[][], cols: number, rows: number): string {
+  const offscreen = document.createElement('canvas');
+  const scale = 4;
+  offscreen.width = cols * scale;
+  offscreen.height = rows * scale;
+  const ctx2d = offscreen.getContext('2d')!;
+  ctx2d.fillStyle = '#0b1220';
+  ctx2d.fillRect(0, 0, offscreen.width, offscreen.height);
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const color = canvasData[y]?.[x];
+      if (color) {
+        ctx2d.fillStyle = color;
+        ctx2d.fillRect(x * scale, y * scale, scale, scale);
+      }
+    }
+  }
+  return offscreen.toDataURL('image/png');
+}
+
+async function judgeWithAI(
+  apiKey: string,
+  prompt: string,
+  canvasData: (string | null)[][],
+  cols: number,
+  rows: number,
+): Promise<{ score: number; commentary: string }> {
+  const dataUrl = canvasToDataURL(canvasData, cols, rows);
+  const base64 = dataUrl.split(',')[1] ?? '';
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 120,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: 'image/png', data: base64 } },
+          {
+            type: 'text',
+            text: `This is a collaborative pixel art painting. The prompt was: "${prompt}". Rate how well the painting represents the prompt on a scale of 1–10 (10 = perfect). Reply with JSON only, no explanation outside it: {"score": <number>, "commentary": "<one sentence>"}`,
+          },
+        ],
+      }],
+    }),
+  });
+  if (!res.ok) throw new Error(`API error ${res.status}`);
+  const json = await res.json() as { content: Array<{ text: string }> };
+  return JSON.parse(json.content[0]!.text) as { score: number; commentary: string };
+}
+
+function fmt(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
 export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<PixelHeartState>) {
   const { cols, rows, canvas, config } = state;
   const { wrapRef, cell } = useBoardSize(cols, rows);
   const [showDrawer, setShowDrawer] = useState(false);
   const [paintOpacity, setPaintOpacity] = useState(1.0);
+
+  // Prompt mode state (host)
+  const [promptDraft, setPromptDraft] = useState('');
+  const [apiKey, setApiKey] = useState('');
+  const [isJudging, setIsJudging] = useState(false);
+  const [judgeError, setJudgeError] = useState('');
+  const [manualScore, setManualScore] = useState(7);
+  const [manualCommentary, setManualCommentary] = useState('');
+
+  // Countdown timer
+  const [tickMs, setTickMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (state.phase !== 'painting') return;
+    const id = setInterval(() => setTickMs(Date.now()), 500);
+    return () => clearInterval(id);
+  }, [state.phase]);
+
+  // Auto-end round when timer expires
+  useEffect(() => {
+    if (!isHost || state.phase !== 'painting' || !state.roundEndMs) return;
+    if (tickMs >= state.roundEndMs) {
+      send({ type: 'GAME_END_ROUND' });
+    }
+  }, [tickMs, isHost, state.phase, state.roundEndMs, send]);
+
+  const secondsLeft = state.roundEndMs ? Math.max(0, Math.floor((state.roundEndMs - tickMs) / 1000)) : null;
 
   useEffect(() => {
     send({ type: 'GAME_JOIN', name: myName });
@@ -57,6 +147,49 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
   const me = players.find((p) => p.name === myName);
   const myEffect = me ? state.effects[me.id] : undefined;
   const myLastPaint = me ? state.wormLastPaints[me.id] : undefined;
+
+  // Refs for keyboard handler (avoids stale closure)
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const meRef = useRef(me);
+  meRef.current = me;
+  const paintOpacityRef = useRef(paintOpacity);
+  paintOpacityRef.current = paintOpacity;
+
+  // Worm mode keyboard navigation
+  useEffect(() => {
+    const ARROW_DELTAS: Record<string, [number, number]> = {
+      ArrowLeft: [-1, 0],
+      ArrowRight: [1, 0],
+      ArrowUp: [0, -1],
+      ArrowDown: [0, 1],
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const s = stateRef.current;
+      const myPlayer = meRef.current;
+      if (!s.config.wormMode || !myPlayer) return;
+
+      if (e.key in ARROW_DELTAS) {
+        e.preventDefault();
+        const cur = s.wormLastPaints[myPlayer.id];
+        if (!cur) return;
+        const [dx, dy] = ARROW_DELTAS[e.key]!;
+        const nx = Math.max(0, Math.min(s.cols - 1, cur.x + dx));
+        const ny = Math.max(0, Math.min(s.rows - 1, cur.y + dy));
+        send({ type: 'GAME_WORM_MOVE', x: nx, y: ny });
+        return;
+      }
+
+      if (e.key === ' ') {
+        e.preventDefault();
+        const cur = s.wormLastPaints[myPlayer.id];
+        if (!cur) return;
+        send({ type: 'GAME_PAINT', x: cur.x, y: cur.y, opacity: paintOpacityRef.current });
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [send]); // send is stable; stateRef/meRef/paintOpacityRef update without re-registering
 
   const powerupAt = new Map<string, PowerUpKind>();
   for (const pu of state.powerups) powerupAt.set(`${pu.x},${pu.y}`, pu.kind);
@@ -76,8 +209,23 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
   const boardW = cell * cols + GAP * (cols - 1);
   const boardH = cell * rows + GAP * (rows - 1);
 
+  const handleAIJudge = async () => {
+    if (!apiKey || !state.prompt) return;
+    setIsJudging(true);
+    setJudgeError('');
+    try {
+      const result = await judgeWithAI(apiKey, state.prompt, state.canvas, state.cols, state.rows);
+      send({ type: 'GAME_SET_SCORE', score: result.score, commentary: result.commentary });
+    } catch (err) {
+      setJudgeError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setIsJudging(false);
+    }
+  };
+
   return (
     <div className="flex flex-col w-full h-full py-2 gap-2">
+      {/* Top bar */}
       <div className="flex items-center justify-between flex-wrap gap-2 px-4">
         <h2 className="text-white text-xl font-bold">Co-op Canvas</h2>
         <div className="flex items-center gap-4 text-sm">
@@ -95,6 +243,95 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
         </div>
       </div>
 
+      {/* Prompt banner */}
+      {state.prompt && (
+        <div className={[
+          'mx-4 px-4 py-2 rounded-lg border text-center',
+          state.phase === 'reveal'
+            ? 'bg-amber-950/40 border-amber-500/50'
+            : 'bg-slate-800/60 border-slate-600/50',
+        ].join(' ')}>
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <span className="text-slate-300 text-sm">
+              <span className="text-slate-500 text-xs uppercase tracking-wider mr-2">Prompt</span>
+              {state.prompt}
+            </span>
+            {state.phase === 'painting' && secondsLeft !== null && (
+              <span className={[
+                'font-mono font-bold text-sm tabular-nums',
+                secondsLeft < 30 ? 'text-red-400' : 'text-emerald-400',
+              ].join(' ')}>
+                {fmt(secondsLeft)}
+              </span>
+            )}
+            {state.phase === 'judging' && (
+              <span className="text-amber-400 text-sm animate-pulse">Judging…</span>
+            )}
+            {state.phase === 'reveal' && state.score !== null && (
+              <div className="flex items-center gap-3">
+                <span className="text-amber-400 font-bold text-2xl leading-none">{state.score}/10</span>
+                {state.commentary && (
+                  <span className="text-slate-300 text-sm italic max-w-sm">{state.commentary}</span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Host judge panel — visible outside drawer when in judging phase */}
+      {isHost && state.phase === 'judging' && (
+        <div className="mx-4 px-4 py-3 rounded-lg border border-amber-500/40 bg-amber-950/30 flex flex-col gap-3">
+          <span className="text-amber-300 text-xs uppercase tracking-wider font-medium">Judge this painting</span>
+          <div className="flex gap-2 flex-wrap items-center">
+            <label className="flex flex-col gap-1 text-xs text-slate-400">
+              Score (1–10)
+              <input
+                type="number" min={1} max={10} value={manualScore}
+                onChange={(e) => setManualScore(Number(e.target.value))}
+                className="w-16 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-slate-200 text-sm"
+              />
+            </label>
+            <label className="flex-1 flex flex-col gap-1 text-xs text-slate-400 min-w-40">
+              Commentary
+              <input
+                type="text" value={manualCommentary} placeholder="One sentence…"
+                onChange={(e) => setManualCommentary(e.target.value)}
+                className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-slate-200 text-sm"
+              />
+            </label>
+            <button
+              onClick={() => send({ type: 'GAME_SET_SCORE', score: manualScore, commentary: manualCommentary })}
+              className="self-end py-1.5 px-3 rounded bg-amber-600 hover:bg-amber-500 text-white text-xs font-medium"
+            >
+              Submit
+            </button>
+          </div>
+          <div className="border-t border-slate-700/50 pt-2 flex flex-col gap-2">
+            <span className="text-slate-500 text-xs">Or judge with AI</span>
+            <div className="flex gap-2 flex-wrap items-end">
+              <label className="flex-1 flex flex-col gap-1 text-xs text-slate-400 min-w-40">
+                Anthropic API key
+                <input
+                  type="password" value={apiKey} placeholder="sk-ant-…"
+                  onChange={(e) => setApiKey(e.target.value)}
+                  className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-slate-200 text-sm font-mono"
+                />
+              </label>
+              <button
+                onClick={handleAIJudge}
+                disabled={isJudging || !apiKey}
+                className="self-end py-1.5 px-3 rounded bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-xs font-medium"
+              >
+                {isJudging ? 'Judging…' : 'Judge with Claude'}
+              </button>
+            </div>
+            {judgeError && <p className="text-red-400 text-xs">{judgeError}</p>}
+          </div>
+        </div>
+      )}
+
+      {/* Power-up effect indicator + opacity + color picker row */}
       <div className="flex items-center justify-between flex-wrap gap-2 px-4">
         {myEffect ? (
           <div className="flex items-center gap-2 bg-indigo-900/40 border border-indigo-500/50 rounded-full px-3 py-1 text-sm">
@@ -104,25 +341,59 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
             <span className="text-indigo-300/60 hidden sm:inline">{'—'} {POWERUP_META[myEffect.kind].blurb}</span>
           </div>
         ) : <div />}
-        <div className="flex items-center gap-1">
-          <span className="text-slate-500 text-xs mr-1">Opacity</span>
-          {([1.0, 0.75, 0.5, 0.25] as const).map((v) => (
-            <button
-              key={v}
-              onClick={() => setPaintOpacity(v)}
-              className={[
-                'w-7 h-7 rounded text-xs font-medium border transition-colors',
-                paintOpacity === v
-                  ? 'bg-indigo-600 border-indigo-500 text-white'
-                  : 'bg-slate-800 border-slate-600 text-slate-400 hover:border-slate-500',
-              ].join(' ')}
-            >
-              {v * 100}
-            </button>
-          ))}
+        <div className="flex items-center gap-3">
+          {/* Color picker — shown when admin has enabled player color selection */}
+          {config.colorMode === 'pick' && me && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-slate-500 text-xs">Color</span>
+              {config.colorPalette.length > 0 ? (
+                <div className="flex gap-1">
+                  {config.colorPalette.map((color) => (
+                    <button
+                      key={color}
+                      title={color}
+                      onClick={() => send({ type: 'GAME_SET_COLOR', color })}
+                      className={[
+                        'w-5 h-5 rounded-full border-2 transition-all',
+                        me.color.toUpperCase() === color.toUpperCase()
+                          ? 'border-white scale-125'
+                          : 'border-transparent hover:border-white/60',
+                      ].join(' ')}
+                      style={{ background: color }}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <input
+                  type="color"
+                  value={me.color}
+                  onChange={(e) => send({ type: 'GAME_SET_COLOR', color: e.target.value })}
+                  className="w-7 h-7 rounded cursor-pointer bg-transparent border border-slate-600"
+                />
+              )}
+            </div>
+          )}
+          <div className="flex items-center gap-1">
+            <span className="text-slate-500 text-xs mr-1">Opacity</span>
+            {([1.0, 0.75, 0.5, 0.25] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setPaintOpacity(v)}
+                className={[
+                  'w-7 h-7 rounded text-xs font-medium border transition-colors',
+                  paintOpacity === v
+                    ? 'bg-indigo-600 border-indigo-500 text-white'
+                    : 'bg-slate-800 border-slate-600 text-slate-400 hover:border-slate-500',
+                ].join(' ')}
+              >
+                {v * 100}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
+      {/* Canvas */}
       <div ref={wrapRef} className="flex-1 min-h-0 w-full flex items-center justify-center">
         <div
           className="grid bg-slate-950 rounded"
@@ -170,6 +441,7 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
         </div>
       </div>
 
+      {/* Player list */}
       <div className="flex flex-wrap gap-2 px-4">
         {players.map((p) => {
           const eff = state.effects[p.id];
@@ -204,9 +476,14 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
             paint{state.paintsUntilNextPowerup !== 1 ? 's' : ''}
           </p>
         ) : null}
+        {config.wormMode && (
+          <p className="text-indigo-400/60 text-xs text-center mt-0.5">
+            Worm mode — arrows to move, space to paint
+          </p>
+        )}
       </div>
 
-      {/* Admin drawer — presenter only */}
+      {/* Admin drawer */}
       {isHost && (
         <>
           {showDrawer && (
@@ -217,7 +494,7 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
           )}
           <div
             className={[
-              'fixed top-0 right-0 h-full z-50 w-72 bg-slate-900 border-l border-slate-700/60 shadow-2xl',
+              'fixed top-0 right-0 h-full z-50 w-80 bg-slate-900 border-l border-slate-700/60 shadow-2xl',
               'flex flex-col overflow-y-auto transition-transform duration-200',
               showDrawer ? 'translate-x-0' : 'translate-x-full',
             ].join(' ')}
@@ -252,6 +529,123 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
                   <input type="range" min={0} max={2000} step={50} value={config.cooldownMs}
                     onChange={(e) => setConfig({ cooldownMs: Number(e.target.value) })} />
                 </label>
+              </section>
+
+              {/* Colors */}
+              <section className="flex flex-col gap-3 border-t border-slate-700/50 pt-4">
+                <span className="text-slate-400 font-medium uppercase tracking-wider text-[10px]">Colors</span>
+                <div className="flex items-center gap-2">
+                  <span className="shrink-0">Mode:</span>
+                  <button
+                    onClick={() => setConfig({ colorMode: 'random' })}
+                    className={[
+                      'px-2 py-0.5 rounded text-xs border transition-colors',
+                      config.colorMode === 'random'
+                        ? 'bg-indigo-600 border-indigo-500 text-white'
+                        : 'bg-slate-800 border-slate-600 text-slate-300 hover:border-slate-500',
+                    ].join(' ')}
+                  >
+                    Random
+                  </button>
+                  <button
+                    onClick={() => setConfig({ colorMode: 'pick' })}
+                    className={[
+                      'px-2 py-0.5 rounded text-xs border transition-colors',
+                      config.colorMode === 'pick'
+                        ? 'bg-indigo-600 border-indigo-500 text-white'
+                        : 'bg-slate-800 border-slate-600 text-slate-300 hover:border-slate-500',
+                    ].join(' ')}
+                  >
+                    Let players pick
+                  </button>
+                </div>
+                {config.colorMode === 'pick' && (
+                  <div className="flex flex-col gap-2">
+                    <span className="text-slate-500">Palette</span>
+                    <button
+                      onClick={() => setConfig({ colorPalette: [] })}
+                      className={[
+                        'text-left px-2 py-1 rounded border transition-colors text-xs',
+                        config.colorPalette.length === 0
+                          ? 'bg-indigo-600/30 border-indigo-500/50 text-indigo-200'
+                          : 'bg-slate-800 border-slate-600 text-slate-300 hover:border-slate-500',
+                      ].join(' ')}
+                    >
+                      Any color
+                    </button>
+                    {PALETTES.map((pal) => (
+                      <button
+                        key={pal.id}
+                        onClick={() => setConfig({ colorPalette: pal.colors })}
+                        className={[
+                          'text-left px-2 py-1.5 rounded border transition-colors',
+                          JSON.stringify(config.colorPalette) === JSON.stringify(pal.colors)
+                            ? 'bg-indigo-600/30 border-indigo-500/50'
+                            : 'bg-slate-800 border-slate-600 hover:border-slate-500',
+                        ].join(' ')}
+                      >
+                        <div className="text-slate-200 mb-1">{pal.name}</div>
+                        <div className="flex gap-0.5">
+                          {pal.colors.map((c) => (
+                            <div key={c} className="w-4 h-4 rounded-sm" style={{ background: c }} />
+                          ))}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              {/* Prompt Mode */}
+              <section className="flex flex-col gap-3 border-t border-slate-700/50 pt-4">
+                <span className="text-slate-400 font-medium uppercase tracking-wider text-[10px]">Prompt Mode</span>
+                <label className="flex flex-col gap-1">
+                  <span>Painting prompt</span>
+                  <textarea
+                    value={promptDraft}
+                    onChange={(e) => setPromptDraft(e.target.value)}
+                    placeholder="e.g. Paint a mountain at sunset"
+                    rows={2}
+                    className="bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-slate-200 resize-none text-xs"
+                  />
+                </label>
+                <button
+                  onClick={() => send({ type: 'GAME_SET_PROMPT', prompt: promptDraft })}
+                  disabled={!promptDraft.trim()}
+                  className="w-full py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-slate-200 text-xs transition-colors"
+                >
+                  Set prompt
+                </button>
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-slate-500">Start round</span>
+                  <div className="grid grid-cols-4 gap-1">
+                    {[1, 2, 3, 5].map((min) => (
+                      <button
+                        key={min}
+                        onClick={() => { send({ type: 'GAME_START_ROUND', durationMs: min * 60_000 }); setShowDrawer(false); }}
+                        className="py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-white text-xs"
+                      >
+                        {min}m
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {state.phase === 'painting' && (
+                  <button
+                    onClick={() => send({ type: 'GAME_END_ROUND' })}
+                    className="w-full py-1.5 rounded-lg bg-amber-700 hover:bg-amber-600 text-white text-xs"
+                  >
+                    End round now
+                  </button>
+                )}
+                {state.phase === 'reveal' && (
+                  <button
+                    onClick={() => { send({ type: 'GAME_SET_PROMPT', prompt: promptDraft || state.prompt || '' }); }}
+                    className="w-full py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs"
+                  >
+                    Reset for next round
+                  </button>
+                )}
               </section>
 
               {/* Power-ups */}
@@ -328,7 +722,7 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
                     onChange={(e) => setConfig({ wormMode: e.target.checked })} />
                   <span className="flex flex-col gap-0.5">
                     <span>Worm mode</span>
-                    <span className="text-slate-500">Each paint must be adjacent to your last one</span>
+                    <span className="text-slate-500">Each paint must be adjacent to your last one. Use arrow keys + space to navigate.</span>
                   </span>
                 </label>
               </section>
