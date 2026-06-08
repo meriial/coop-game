@@ -44,7 +44,7 @@ function fmt(seconds: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<PixelHeartState>) {
+export function PixelHeart({ state, send, isHost, myName, myOwner }: GameComponentProps<PixelHeartState>) {
   const { cols, rows, canvas, config } = state;
   const { wrapRef, cell } = useBoardSize(cols, rows);
   const [showDrawer, setShowDrawer] = useState(false);
@@ -82,7 +82,10 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
   const handleDropPowerup = () => send({ type: 'GAME_DROP_POWERUP' });
 
   const players = Object.values(state.players);
-  const me = players.find((p) => p.name === myName);
+  // Identify "me" by owner email (the player id), not display name: an agent sharing
+  // this email (e.g. "Music's Loop Agent") renames the shared row, which would break a
+  // name match and hide me-gated UI like the colour picker.
+  const me = players.find((p) => p.id === myOwner);
   const myEffect = me ? state.effects[me.id] : undefined;
   const myLastPaint = me ? state.wormLastPaints[me.id] : undefined;
   const myCursor = me ? (state.wormCursors[me.id] ?? myLastPaint) : undefined;
@@ -325,7 +328,7 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
       <div className="flex flex-wrap gap-2 px-4">
         {players.map((p) => {
           const eff = state.effects[p.id];
-          const isMe = p.name === myName;
+          const isMe = p.id === myOwner;
           return (
             <div
               key={p.id}
