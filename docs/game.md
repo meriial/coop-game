@@ -23,11 +23,13 @@ The workshop presentation includes two multiplayer games, implemented as plugins
 
 ## pixel-heart (co-op canvas)
 
-**Concept:** Cooperative real-time painting on a shared, configurable grid. Players (and their agents) paint cells; colors blend with their neighbours, building emergent gradients. Occasional power-ups temporarily change how your paint behaves. No scores, no teams — it's meant to be playful.
+**Concept:** Cooperative real-time painting on a shared, configurable grid. Players (and their agents) paint cells; colors blend with their neighbours, building emergent gradients. Occasional power-ups temporarily change how your paint behaves. Optionally, the presenter sets a text prompt and the group races to paint it — judged by a human or by Claude Vision.
 
 > The game id is still `pixel-heart` for compatibility, but it is no longer a fixed heart target — it's a free canvas.
 
-**Messages:** `GAME_JOIN`, `GAME_PAINT`, `GAME_PAINT_PATH`, `GAME_CONFIG`, `GAME_RESET` (inbound) · `SYNC_CANVAS` (outbound)
+**Messages (inbound):** `GAME_JOIN`, `GAME_PAINT`, `GAME_PAINT_PATH`, `GAME_CONFIG`, `GAME_RESET`, `GAME_SET_COLOR`, `GAME_WORM_MOVE`, `GAME_SET_PROMPT`, `GAME_START_ROUND`, `GAME_END_ROUND`, `GAME_SET_SCORE`
+
+**Messages (outbound):** `SYNC_CANVAS`
 
 **Package:** `packages/games/pixel-heart/` — engine in `src/engine.ts`
 
@@ -70,9 +72,83 @@ Power-ups spawn on empty cells on a timer (activity-gated on paints, so there's 
 - **Coverage** (`progress`): painted cells / total cells × 100.
 - **Harmony** (`harmony`): cells blended by 2+ distinct painters / painted cells × 100.
 
+### Worm mode
+
+When worm mode is enabled (`config.wormMode: true`), each paint must be within Chebyshev distance 1 of the player's last paint. This forces a connected path and makes both human and agent movement legible on the canvas.
+
+**Keyboard navigation (worm mode only):**
+
+| Key | Action |
+|-----|--------|
+| `←` `↑` `→` `↓` | Move cursor one cell (sends `GAME_WORM_MOVE`) |
+| `Space` | Stamp paint at current cursor position |
+
+The cursor (indigo ring) is visible to all players in real time. Clicking a cell still works as before — the click position becomes the new cursor. Arrow key moves obey the same adjacency constraint as paints; the server rejects teleport attempts silently.
+
+`GAME_WORM_MOVE { x, y }` — moves the cursor without painting; validates adjacency and updates `wormLastPaints`. Agents can use this to position before a batch paint.
+
+### Player color picking
+
+Controlled by `config.colorMode`:
+
+- **`'random'`** (default) — server assigns a color on join; players cannot change it.
+- **`'pick'`** — each player sees a color picker. If `config.colorPalette` is set, they choose from swatches; otherwise a free color input (`<input type="color">`) is shown.
+
+`GAME_SET_COLOR { color: string }` — sets the sending player's color. Rejected if `colorMode !== 'pick'`, if the hex string is malformed, or if the palette is non-empty and the color is not in it.
+
+**Built-in palettes** (set via `GAME_CONFIG { colorMode: 'pick', colorPalette: [...] }`):
+
+| Palette | Description |
+|---------|-------------|
+| **Earth** | Browns, forest greens, olive, slate — muted but distinct |
+| **Pastel** | Soft pinks, peach, butter, mint, sky, lavender |
+| **Vibrant** | High-saturation spread across the full hue wheel |
+
+Palettes are exported from `packages/games/pixel-heart/src/palettes.ts` so scripts can reference them.
+
+### Paint This Prompt mode
+
+A lightweight round structure layered on top of free painting. The presenter sets a text prompt, starts a countdown, and then judges the result — either manually or via Claude Vision.
+
+**Round lifecycle:**
+
+```
+idle → painting → judging → reveal → (idle again)
+```
+
+| State | What players see |
+|-------|-----------------|
+| `idle` | Prompt banner visible; no timer |
+| `painting` | Countdown timer (turns red at 30 s) |
+| `judging` | "Judging…" indicator; host sees judge panel |
+| `reveal` | Score (1–10) and one-sentence commentary |
+
+**Presenter messages:**
+
+| Message | Effect |
+|---------|--------|
+| `GAME_SET_PROMPT { prompt }` | Sets prompt text, transitions to `idle`, clears previous score |
+| `GAME_START_ROUND { durationMs }` | Starts countdown (`min 30 s`, `max 10 min`), clears previous score |
+| `GAME_END_ROUND` | Transitions to `judging` immediately (also fires automatically when timer expires) |
+| `GAME_SET_SCORE { score, commentary }` | Records score (1–10) and one-sentence commentary; transitions to `reveal` |
+
+**AI judging:** the presenter UI includes a "Judge with Claude" button. It renders the canvas to a PNG in the browser (4 px/cell), sends it to `claude-haiku-4-5-20251001` via the Anthropic API with the prompt text, and parses `{ score, commentary }` from the response. The presenter's API key is entered inline and never leaves the browser.
+
+**State fields added to `CanvasState`:**
+
+```ts
+prompt:     string | null;
+phase:      'idle' | 'painting' | 'judging' | 'reveal';
+roundEndMs: number | null;   // epoch ms when the round ends
+score:      number | null;   // 1–10
+commentary: string | null;
+```
+
+**Agent use:** agents can read `prompt`, `phase`, and `roundEndMs` from `SYNC_CANVAS` to decide when to start painting and how urgently to act. The `get_state` MCP tool surfaces these fields.
+
 ### Presenter controls (`GAME_CONFIG`, presenter-only)
 
-Set `cols`, `rows`, `mixStrength`, `cooldownMs`, `agentBatchMax`, `powerupsEnabled`, `powerupIntervalMs`, `powerupMax`. Resizing drops any cells/power-ups that fall outside the new bounds. `GAME_RESET` clears cells, power-ups, claims, effects, and cooldowns.
+Set `cols`, `rows`, `mixStrength`, `cooldownMs`, `agentBatchMax`, `powerupsEnabled`, `powerupIntervalMs`, `powerupMax`, `wormMode`, `colorMode`, `colorPalette`. Resizing drops any cells/power-ups that fall outside the new bounds. `GAME_RESET` clears cells, power-ups, claims, effects, and cooldowns (prompt and phase are not reset — use `GAME_SET_PROMPT` to clear them).
 
 ### Agent / MCP API
 
@@ -96,8 +172,8 @@ Brainstormed mechanics that fit the architecture; adding a new power-up is rough
 - **Gentle decay** — untouched cells slowly drift toward transparent, keeping the canvas breathing (would need a periodic tick; mind the shared DO alarm).
 - **Heartbeat / pulse** — a global rhythm where paints landing on the beat spread a little further, giving humans and agents a shared tempo.
 - **Ripple / harmony glow** — client-side animation on each paint and a soft glow on freshly blended cells.
-- **Optional template overlay** — a faint admin-chosen guide shape (e.g. the original heart) with its own fill %, bridging free-paint and goal-directed play.
-- **Live cursors** — show where other players/agents are about to paint (`CONNECTED_USERS` already carries presence; would need cursor positions on the wire).
+- **Territory Fill mode** — show a shape silhouette on the canvas; score is in-shape painted cells minus out-of-shape penalty. Exposes agent precision advantage clearly.
+- **Live cursors** — show where other players/agents are about to paint (`CONNECTED_USERS` already carries presence; would need cursor positions on the wire; worm mode already does this via `wormLastPaints`).
 
 ## Legacy `/ws` game room
 
