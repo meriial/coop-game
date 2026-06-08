@@ -62,15 +62,18 @@ cd server && npm test                    # 25 automated WebSocket tests (no serv
 
 ## MCP agents
 
-The workshop exposes a stdio MCP server (`packages/mcp-server`) with tools like `get_config`, `get_state`, `paint`, and `paint_path`.
+The workshop exposes a stdio MCP server (`packages/mcp-server`) with tools `get_config`, `get_state`, `paint`, `wait_for_update`, and `take_action` (batch paint, free-paint, and colour changes all go through `take_action`).
 
 **Recommended for dev/demos:** [Poor man's MCP](./docs/architecture.md#poor-mans-mcp-scripted-client) — spawn the server from a Node script and call tools via `@modelcontextprotocol/sdk`, no Cursor MCP config required:
 
 ```bash
 cd packages/mcp-server && npm run build
-npm run verify:canvas          # smoke-test all canvas tools
-node scripts/draw-circle.mjs   # agent-style circle demo
+npm run verify:canvas                                  # smoke-test the canvas tools
+node scripts/mcp-call.mjs --backend prod get_state     # generic switchable transport
+node scripts/draw-circle.mjs                           # agent-style circle demo
 ```
+
+Before writing an agent that paints, read the **[Agent painting playbook](docs/game.md#agent-painting-playbook)** — worm mode, cooldown, and silent paint-drops will trip you up otherwise.
 
 Details, env vars, and the full script list: [docs/architecture.md § MCP bridge](docs/architecture.md#mcp-bridge).
 

@@ -303,10 +303,15 @@ node scripts/prep-canvas.mjs
 # Smoke-test all canvas tools
 npm run verify:canvas
 
-# Agent demos (batched paint_path)
+# Agent demos
 node scripts/draw-circle.mjs
 node scripts/creative-draw.mjs --pattern spiral --owner bot@example.com --name "Spiral Bot" --label "Spiral Agent"
+
+# Switchable transport (local/prod, any identity) — free-paint a cell in worm mode:
+node scripts/mcp-call.mjs --backend prod take_action '{"type":"GAME_PAINT","payload":{"x":10,"y":8,"fromCursor":true}}'
 ```
+
+> ⚠️ `draw-circle.mjs`, `creative-draw.mjs`, `paint-agent.mjs`, and `verify-canvas.mjs` (i.e. `npm run verify:canvas`) still call the **removed `paint_path` tool**; the bridge returns an MCP error for it and the scripts crash (e.g. `draw-circle.mjs` throws a `SyntaxError` parsing the `"MCP error …"` string). Until updated to `take_action({ type: 'GAME_PAINT_PATH', … })`, use `mcp-call.mjs` + `GAME_PAINT { fromCursor: true }` to free-paint — see [game.md § Agent painting playbook](./game.md#agent-painting-playbook).
 
 Scripts live in `packages/mcp-server/scripts/`. JWT: use section 4 token, `frontend/.env` `VITE_AGENT_TOKEN`, or sign locally with `JWT_SECRET` from `server/.dev.vars` (see `prep-canvas.mjs`).
 
@@ -331,8 +336,8 @@ node dist/index.js   # stdio — register this command in your MCP host config
 |---|---|
 | `get_config` | Grid size, cooldown, `agentBatchMax`, power-up rules |
 | `get_state` | JSON with `activeGameId`, compact canvas state, `identity.name` = `"<Owner>'s Agent 1"` |
-| `paint_path` | Batch paint on co-op canvas; coverage increases |
-| `take_action` | Send e.g. `{ "type": "MATCH_FLIP", "pos": 0 }` on periodic-match step |
+| `paint` | Single paint on co-op canvas; coverage increases (adjacency-locked in worm mode) |
+| `take_action` | Batch via `{ "type": "GAME_PAINT_PATH", "payload": { "cells": [...] } }`, or e.g. `{ "type": "MATCH_FLIP", "pos": 0 }` on periodic-match step |
 | `wait_for_update` | Returns after another player moves or times out ~25s when idle |
 
 **Agent cap test** (periodic-match, step 0): connect a second agent with the same owner token + different `agentLabel` → WebSocket upgrade returns **403**.

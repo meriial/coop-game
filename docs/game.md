@@ -60,7 +60,7 @@ Power-ups spawn on empty cells on a timer (activity-gated on paints, so there's 
 | **Supernova** (`supernova`) | Paints spread 2 cells out instead of 1 | 3 |
 | **Additive** (`additive`) | Neighbours blend by adding light — overlaps brighten | 6 |
 
-**Fairness rotation:** once you claim a power-up you are **ineligible until everyone else has claimed one**; then the cycle resets (`paint_powerup_claims`). The active effect is keyed per player (`paint_effects`) and surfaced in state so the painter and their agents can see it.
+**No fairness gate** (as of "remove powerup fairness rotation"): you can claim as many power-ups as you can physically reach — the only limit is getting to the cell, which in worm mode means walking there step by step. The active effect is keyed per player (`paint_effects`) and surfaced in state so the painter and their agents can see it. (`get_state` still returns a `powerupEligible` field; it is effectively always true now.)
 
 ### Rate limiting
 
@@ -86,6 +86,8 @@ When worm mode is enabled (`config.wormMode: true`), each paint must be within C
 The cursor (indigo ring) is visible to all players in real time. Clicking a cell still works as before — the click position becomes the new cursor. Arrow key moves obey the same adjacency constraint as paints; the server rejects teleport attempts silently.
 
 `GAME_WORM_MOVE { x, y }` — moves the cursor without painting; validates adjacency and updates `wormLastPaints`. Agents can use this to position before a batch paint.
+
+**`fromCursor` bypass (how to free-paint in worm mode):** `GAME_PAINT { x, y, fromCursor: true }` **skips the adjacency check** and paints anywhere — this is how the keyboard spacebar stamps at the cursor, and it's the simplest way for an agent to draw an arbitrary (non-connected) shape without turning worm mode off. **Caveats:** `fromCursor` is only honoured on `GAME_PAINT` — `GAME_PAINT_PATH` is always worm-locked (each cell must chain adjacently from the previous). The per-player `cooldownMs` still applies. See [§ Agent painting playbook](#agent-painting-playbook).
 
 ### Player color picking
 
@@ -152,14 +154,32 @@ Set `cols`, `rows`, `mixStrength`, `cooldownMs`, `agentBatchMax`, `powerupsEnabl
 
 ### Agent / MCP API
 
-The MCP bridge (`packages/mcp-server/`) exposes co-op-canvas-aware tools so an LLM can play meaningfully:
+The MCP bridge (`packages/mcp-server/`) exposes co-op-canvas-aware tools so an LLM can play meaningfully. The registered tools are:
 
 - `get_config` — grid size, mix strength, cooldown, batch size, power-up kinds, and plain-English rules.
-- `get_state` — compact view: dimensions, coverage, harmony, **only the painted cells**, active power-ups, plus **your color, your active effect, and your power-up eligibility**.
-- `paint(x, y)` and `paint_path(cells)` — typed paint actions (`paint_path` is capped at `agentBatchMax`).
-- `wait_for_update` / `take_action` — generic reactive primitives, retained.
+- `get_state` — compact view: dimensions, coverage, harmony, **only the painted cells** (plus an `asciiCanvas` text rendering), active power-ups, plus **your color, your active effect, and your power-up eligibility**.
+- `paint(x, y)` — single typed paint. Note: this sends a plain `GAME_PAINT` (no `fromCursor`), so in worm mode it is adjacency-locked.
+- `wait_for_update` — long-poll until the next `SYNC_*` state change (the bridge→agent leg is pull-based; MCP can't push mid-turn).
+- `take_action({ type, payload })` — send **any** inbound message. This is the escape hatch for messages without a dedicated tool: `GAME_PAINT_PATH` (batch), `GAME_PAINT` with `fromCursor: true` (free-paint, see below), `GAME_SET_COLOR`, `GAME_WORM_MOVE`, etc. It waits for the resulting `SYNC_*` before returning, so the write is delivered before the call resolves.
 
-You do not need Cursor MCP config to use these tools — see **[architecture.md § Poor man's MCP](./architecture.md#poor-mans-mcp-scripted-client)** for the scripted-client pattern (`verify-canvas.mjs`, `draw-circle.mjs`, etc.).
+> There is **no `paint_path` MCP tool** — earlier docs/builds had one, but the current bridge dropped it. Paint a path with `take_action({ type: 'GAME_PAINT_PATH', payload: { cells } })` (capped at `agentBatchMax`, one cooldown slot for the batch).
+
+You do not need Cursor MCP config to use these tools — see **[architecture.md § Poor man's MCP](./architecture.md#poor-mans-mcp-scripted-client)** for the scripted-client pattern (`mcp-call.mjs`, `draw-circle.mjs`, etc.).
+
+### Agent painting playbook
+
+Hard-won gotchas — **read this before writing an agent that paints, or your paints will silently vanish with no error.**
+
+**1. Paints are dropped silently.** Every reject path is a quiet `return false`/early-return server-side; the MCP tool still echoes `{ sent: ... }`. **Never trust the tool echo — confirm landings via a fresh `get_state`** (`paintedCount` rose, or your `{x,y}` is in `paintedCells`). The three reasons a paint vanishes:
+  - **Worm mode adjacency** — in `wormMode`, a `GAME_PAINT`/`GAME_PAINT_PATH` cell must be within Chebyshev distance 1 of your *last* paint (`paint_worm_last`). Your **first** paint (no last-paint row yet) lands anywhere. **Bypass with `GAME_PAINT { fromCursor: true }`** (not available on `GAME_PAINT_PATH`).
+  - **Cooldown** — `cooldownMs` gates every paint; faster paints are dropped. A `GAME_PAINT_PATH` batch consumes **one** cooldown slot for the whole batch.
+  - **Connection lifetime** — if you fire a message and close the socket immediately, it may not be delivered. The `paint`/`take_action` tools `await waitForUpdate`, so a one-shot connect→call→close is safe; raw fire-and-forget sends are not.
+
+**2. Free-paint an arbitrary shape:** `take_action({ type: 'GAME_PAINT', payload: { x, y, fromCursor: true } })` per cell. Respect `cooldownMs` between calls (sequential `mcp-call.mjs` spawns are naturally far enough apart). Painting also blends the 8 neighbours into a halo, so outlines thicken — skeletons read better than dense fills.
+
+**3. Draw with multiple colours:** the room must be in `colorMode: 'pick'` (presenter-set). Then `take_action({ type: 'GAME_SET_COLOR', payload: { color } })` changes your colour for **future** paints (existing cells keep their stored colour). If `colorPalette` is non-empty the colour must be a member; otherwise any `#RRGGBB`. `GAME_SET_COLOR` is **not** presenter-only — any player/agent can set their own.
+
+**4. Identity = your JWT `email`.** Player rows are keyed by email. If your agent signs a token with a **human's** email, it **shares that human's row** — same pill, same colour — and its decorated display name (`"<Name>'s <agentLabel>"`) overwrites theirs on join. For an independent bot (own pill/colour), use a **distinct email**. The room de-dupes pills by email, so reconnecting with one pinned email always shows exactly one pill. See [architecture.md § Poor man's MCP](./architecture.md#poor-mans-mcp-scripted-client).
 
 ### Future ideas (not yet implemented)
 

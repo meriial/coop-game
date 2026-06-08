@@ -185,9 +185,11 @@ The original `GameClient` in `sdk/src/client.ts` still targets `GameRoom` at `/w
 |---|---|
 | `get_state` | Active game id + state snapshot + agent identity (compact, agent-aware view for the co-op canvas) |
 | `get_config` | Co-op canvas rules: grid, mix strength, cooldown, batch size, power-up kinds |
-| `paint` / `paint_path` | Paint one cell, or a batch of up to `agentBatchMax` cells |
+| `paint` | Paint one cell (plain `GAME_PAINT`, adjacency-locked in worm mode) |
 | `wait_for_update` | Long-poll until next `SYNC_*` (or ~25s timeout) |
-| `take_action` | Send an arbitrary inbound message (e.g. `MATCH_FLIP`, `GAME_PAINT`) |
+| `take_action` | Send an arbitrary inbound message — used for `GAME_PAINT_PATH` (batch), `GAME_PAINT { fromCursor: true }` (free-paint), `GAME_SET_COLOR`, `MATCH_FLIP`, … |
+
+There is no `paint_path` tool; batch via `take_action({ type: 'GAME_PAINT_PATH', payload: { cells } })` (≤ `agentBatchMax`).
 
 Build once (`npm run build` in `packages/mcp-server`) — esbuild bundles `@workshop/sdk` into `dist/index.js` so plain `node` works.
 
@@ -199,7 +201,7 @@ You do **not** need to register the server in Cursor, Claude Desktop, or any MCP
 
 1. **Spawn** `node packages/mcp-server/dist/index.js` as a stdio subprocess.
 2. **Connect** with `@modelcontextprotocol/sdk`'s `Client` + `StdioClientTransport`.
-3. **Call tools** (`get_config`, `get_state`, `paint_path`, …) from any Node script, shell loop, or CI job.
+3. **Call tools** (`get_config`, `get_state`, `paint`, `take_action`, …) from any Node script, shell loop, or CI job.
 
 The MCP server is just a thin adapter between MCP tool calls and the room WebSocket — your script plays the role of the "LLM", supplying the plan (geometry, loops, batching).
 
@@ -227,13 +229,16 @@ const result = await client.callTool({ name: 'get_config', arguments: {} });
 const text = result.content.find((c) => c.type === 'text').text;
 console.log(JSON.parse(text));
 
+// Paint a path via take_action (there is no `paint_path` MCP tool anymore).
 await client.callTool({
-  name: 'paint_path',
-  arguments: { cells: [{ x: 10, y: 8 }, { x: 11, y: 8 }] },
+  name: 'take_action',
+  arguments: { type: 'GAME_PAINT_PATH', payload: { cells: [{ x: 10, y: 8 }, { x: 11, y: 8 }] } },
 });
 
 await client.close();
 ```
+
+> **Registered tools:** `get_config`, `get_state`, `paint`, `wait_for_update`, `take_action`. Anything else (`GAME_PAINT_PATH`, `GAME_PAINT { fromCursor: true }`, `GAME_SET_COLOR`, …) goes through `take_action`. Before driving paints, read **[game.md § Agent painting playbook](./game.md#agent-painting-playbook)** — worm mode, cooldown, and silent drops will eat your paints otherwise.
 
 **Why bother?** Same wire protocol and tools a hosted MCP client would use, but zero editor setup — useful for smoke tests, scripted demos, subagents running shell commands, and prototyping agent logic before wiring Cursor.
 
@@ -241,10 +246,32 @@ await client.close();
 
 | Script | What it does |
 |---|---|
-| `verify-canvas.mjs` | Smoke-test all canvas MCP tools against a live room |
+| `mcp-call.mjs` | **Generic one-shot transport.** Connects with one pinned identity, invokes one tool, prints JSON, exits. Switchable backend + identity (see below). The building block for an agent-in-the-loop. |
+| `verify-canvas.mjs` | Smoke-test the canvas MCP tools against a live room |
 | `prep-canvas.mjs` | Presenter JWT: advance to step 7, reset canvas, set grid/cooldown |
-| `creative-draw.mjs` | One agent, one pattern (`--pattern spiral\|wave\|diamond`) via batched `paint_path` |
-| `draw-circle.mjs` | Agent-style demo: `get_config` → plan circle outline → `paint_path` batches |
+| `creative-draw.mjs` | One agent, one pattern (`--pattern spiral\|wave\|diamond`) via batched paths |
+| `draw-circle.mjs` | Agent-style demo: `get_config` → plan circle outline → batched paint |
+
+> ⚠️ **Stale scripts:** `draw-circle.mjs`, `creative-draw.mjs`, `verify-canvas.mjs`, and `paint-agent.mjs` still `callTool('paint_path', …)`. That tool was removed from the bridge, so the call now **returns an MCP error** for the missing tool and the scripts crash (e.g. `draw-circle.mjs` throws a `SyntaxError` trying to `JSON.parse` the `"MCP error …"` string). They also predate worm mode (scan-order paths aren't a connected chain). Until they're updated to `take_action({ type: 'GAME_PAINT_PATH', … })`, prefer `mcp-call.mjs` + `GAME_PAINT { fromCursor: true }`. See [game.md § Agent painting playbook](./game.md#agent-painting-playbook).
+
+**`mcp-call.mjs` — switch backend and identity (like the frontend can):**
+
+```bash
+# Read-only / paint, choosing the backend:
+node scripts/mcp-call.mjs                 get_state    # local (localhost:8787), signed loop-bot identity
+node scripts/mcp-call.mjs --backend prod  get_state    # production, identity from frontend/.env VITE_AGENT_TOKEN
+# Free-paint a cell anywhere (worm-mode bypass):
+node scripts/mcp-call.mjs --backend prod take_action '{"type":"GAME_PAINT","payload":{"x":10,"y":8,"fromCursor":true}}'
+```
+
+| Knob (flag / env) | Meaning |
+|---|---|
+| `--backend local\|prod` (`WORKSHOP_BACKEND`) | `local` = `http://localhost:8787`, sign a JWT with the local dev secret. `prod` = the deployed Worker, token from `frontend/.env`. |
+| `--token <jwt>` (`WORKSHOP_OWNER_TOKEN`) | Use a pre-made token verbatim (any backend). Production rejects locally-signed tokens. |
+| `--email` / `--name` | Local backend: identity to sign for (default `loop-bot@twosmiles.ca`). |
+| `--label` / `--room` | Agent label / room id. |
+
+**Identity caveat (one pill, not many):** the room de-dupes pills by JWT `email`, and player rows are **keyed by email**. Pin one email → exactly one pill no matter how many times you reconnect. But if that email belongs to a **human**, your agent shares their row (pill, colour) and overwrites their display name on join — give a bot its **own** email for a separate identity. A production bot identity needs a prod-signed token (the prod `JWT_SECRET` lives in `wrangler secret`, not the repo).
 
 ```bash
 # Prerequisites: Worker on :8787, room on co-op canvas step (or run prep-canvas.mjs first)
