@@ -115,6 +115,12 @@ printf 'VITE_GAME_URL=%s\nVITE_AGENT_TOKEN=%s\n' "$GAME_URL" "$TOKEN" > examples
 printf 'VITE_SERVER_URL=%s\nVITE_WS_URL=%s\nVITE_AGENT_TOKEN=%s\n' "$WORKER_URL" "$WS_URL" "$TOKEN" > frontend/.env
 echo "Token written."
 
+# Record this identity in the gitignored multi-login list so you can switch
+# between environments (e.g. prod and local dev) from the in-app user pill.
+if command -v node > /dev/null 2>&1 && [ -f scripts/append-dev-user.mjs ]; then
+  node scripts/append-dev-user.mjs "$EMAIL" "$TOKEN" "$WORKER_URL" || true
+fi
+
 if [ "${DRY_RUN:-0}" = "1" ]; then exit 0; fi
 
 # 5. Install deps (requires pnpm — install it if missing) + launch presentation

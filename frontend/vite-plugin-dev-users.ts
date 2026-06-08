@@ -6,6 +6,17 @@ interface DevUser {
   name: string;
   email: string;
   token: string;
+  /** Worker the identity is authenticated against; distinguishes the same email across envs. */
+  workerUrl?: string;
+}
+
+/** Set or append `KEY=value` in a dotenv file's contents. */
+function setEnvLine(content: string, key: string, value: string): string {
+  const line = `${key}=${value}`;
+  const re = new RegExp(`^${key}=.*$`, 'm');
+  if (re.test(content)) return content.replace(re, line);
+  const sep = content === '' || content.endsWith('\n') ? '' : '\n';
+  return `${content}${sep}${line}\n`;
 }
 
 /**
@@ -22,11 +33,8 @@ export function devUsers(): Plugin {
     configureServer(server: ViteDevServer) {
       const root = server.config.root;
       const usersFile = path.resolve(root, 'dev-users.json');
-      // Token lives in both env files (see dev.sh); keep them in sync on switch.
-      const envFiles = [
-        path.resolve(root, '.env'),
-        path.resolve(root, '../examples/starter/.env'),
-      ];
+      const frontendEnv = path.resolve(root, '.env');
+      const starterEnv = path.resolve(root, '../examples/starter/.env');
 
       const readUsers = (): DevUser[] => {
         try {
@@ -59,22 +67,47 @@ export function devUsers(): Plugin {
           } catch {
             /* invalid body → handled below */
           }
-          // Only ever write a token we already know about.
-          if (!token || !readUsers().some((u) => u.token === token)) {
+          // Only ever switch to a token we already know about.
+          const user = readUsers().find((u) => u.token === token);
+          if (!token || !user) {
             res.statusCode = 400;
             res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify({ error: 'unknown token' }));
             return;
           }
-          const line = `VITE_AGENT_TOKEN=${token}`;
-          for (const file of envFiles) {
+          // Switching identities may also mean switching environments (prod ↔ dev),
+          // so rewrite the URL vars alongside the token. Both env files carry the token;
+          // each carries a different subset of URL vars (see dev.sh / setup.sh).
+          const wsBase = (user.workerUrl ?? '')
+            .replace(/^https:\/\//, 'wss://')
+            .replace(/^http:\/\//, 'ws://');
+          const fileVars: Array<[string, Array<[string, string]>]> = [
+            [
+              frontendEnv,
+              [
+                ['VITE_AGENT_TOKEN', user.token],
+                ...(user.workerUrl
+                  ? ([
+                      ['VITE_SERVER_URL', user.workerUrl],
+                      ['VITE_WS_URL', wsBase],
+                    ] as Array<[string, string]>)
+                  : []),
+              ],
+            ],
+            [
+              starterEnv,
+              [
+                ['VITE_AGENT_TOKEN', user.token],
+                ...(wsBase ? ([['VITE_GAME_URL', `${wsBase}/ws`]] as Array<[string, string]>) : []),
+              ],
+            ],
+          ];
+          for (const [file, vars] of fileVars) {
             try {
               if (!fs.existsSync(file)) continue;
-              const content = fs.readFileSync(file, 'utf8');
-              const next = /^VITE_AGENT_TOKEN=.*$/m.test(content)
-                ? content.replace(/^VITE_AGENT_TOKEN=.*$/m, line)
-                : `${content.endsWith('\n') || content === '' ? content : `${content}\n`}${line}\n`;
-              fs.writeFileSync(file, next);
+              let content = fs.readFileSync(file, 'utf8');
+              for (const [key, value] of vars) content = setEnvLine(content, key, value);
+              fs.writeFileSync(file, content);
             } catch {
               /* best-effort: a missing/unwritable env file shouldn't block the switch */
             }

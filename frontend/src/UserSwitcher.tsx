@@ -6,6 +6,8 @@ interface DevUser {
   name: string;
   email: string;
   token: string;
+  /** Worker the identity is authenticated against; distinguishes the same email across envs. */
+  workerUrl?: string;
 }
 
 interface Props {
@@ -14,10 +16,26 @@ interface Props {
   currentEmail: string;
 }
 
+/** Short, human-readable environment label for a worker URL (e.g. "local", a hostname). */
+function envLabel(workerUrl?: string): string {
+  if (!workerUrl) return '';
+  try {
+    const { hostname } = new URL(workerUrl);
+    return hostname === 'localhost' || hostname === '127.0.0.1' ? 'local' : hostname;
+  } catch {
+    return workerUrl;
+  }
+}
+
+/** The env the running dev server is currently pointed at (baked into VITE_SERVER_URL). */
+const CURRENT_ENV = envLabel(import.meta.env.VITE_SERVER_URL as string | undefined);
+
 /**
  * Top-right user pill. In dev, if a gitignored `frontend/dev-users.json` lists more than one
- * authenticated identity (populated by `dev.sh`), the pill becomes a dropdown for switching.
- * Selecting a user asks the dev server to rewrite `VITE_AGENT_TOKEN` and restart, then reloads.
+ * authenticated identity (populated by `dev.sh` / `setup.sh`), the pill becomes a dropdown for
+ * switching. Each identity is tagged with its environment, so the same email logged into both
+ * prod and local dev shows as two switchable entries. Selecting a user asks the dev server to
+ * rewrite the token + URL env vars and restart, then reloads.
  * In production (or with <2 users) it renders the plain, non-interactive label — unchanged.
  */
 export function UserSwitcher({ myName, currentEmail }: Props) {
@@ -98,10 +116,12 @@ export function UserSwitcher({ myName, currentEmail }: Props) {
         <div className="absolute top-full right-0 mt-1.5 w-56 bg-slate-900/95 backdrop-blur-sm border border-slate-700/60 rounded-lg shadow-xl overflow-hidden z-[200]">
           {users.map((u) => {
             const expired = isJwtExpired(u.token);
-            const isCurrent = u.email === currentEmail;
+            const label = envLabel(u.workerUrl);
+            // The same email can appear once per environment, so match on both.
+            const isCurrent = u.email === currentEmail && label === CURRENT_ENV;
             return (
               <button
-                key={u.email}
+                key={`${u.email}::${u.workerUrl ?? ''}`}
                 disabled={expired || isCurrent || switching}
                 onClick={() => switchTo(u.token)}
                 className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs transition-colors ${
@@ -114,6 +134,14 @@ export function UserSwitcher({ myName, currentEmail }: Props) {
                     {expired ? ' (expired)' : ''}
                   </div>
                   <div className="text-slate-500 truncate">{u.email}</div>
+                  {label && (
+                    <span
+                      title={u.workerUrl}
+                      className="mt-1 inline-block max-w-full truncate align-middle text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400"
+                    >
+                      {label}
+                    </span>
+                  )}
                 </div>
                 {isCurrent && <Check size={13} className="text-emerald-400 shrink-0" />}
               </button>

@@ -100,7 +100,7 @@ GAME_URL="$(printf '%s' "$WORKER_URL" | sed 's|^https://|wss://|;s|^http://|ws:/
 printf 'VITE_GAME_URL=%s\nVITE_AGENT_TOKEN=%s\n' "$GAME_URL" "$TOKEN" > examples/starter/.env
 
 # Record this identity in the gitignored multi-login list so you can switch users in-app.
-node "$SCRIPT_DIR/scripts/append-dev-user.mjs" "$EMAIL" "$TOKEN" || true
+node "$SCRIPT_DIR/scripts/append-dev-user.mjs" "$EMAIL" "$TOKEN" "$WORKER_URL" || true
 
 # ── Start frontend ────────────────────────────────────────────────────────────
 echo "Starting presentation frontend..."
