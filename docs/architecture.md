@@ -205,7 +205,7 @@ You do **not** need to register the server in Cursor, Claude Desktop, or any MCP
 
 The MCP server is just a thin adapter between MCP tool calls and the room WebSocket — your script plays the role of the "LLM", supplying the plan (geometry, loops, batching).
 
-**Minimal pattern** (from `packages/mcp-server/scripts/verify-canvas.mjs`):
+**Minimal pattern** (see `packages/mcp-server/scripts/mcp-call.mjs` for a switchable version):
 
 ```javascript
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -247,12 +247,9 @@ await client.close();
 | Script | What it does |
 |---|---|
 | `mcp-call.mjs` | **Generic one-shot transport.** Connects with one pinned identity, invokes one tool, prints JSON, exits. Switchable backend + identity (see below). The building block for an agent-in-the-loop. |
-| `verify-canvas.mjs` | Smoke-test the canvas MCP tools against a live room |
 | `prep-canvas.mjs` | Presenter JWT: advance to step 7, reset canvas, set grid/cooldown |
-| `creative-draw.mjs` | One agent, one pattern (`--pattern spiral\|wave\|diamond`) via batched paths |
-| `draw-circle.mjs` | Agent-style demo: `get_config` → plan circle outline → batched paint |
 
-> ⚠️ **Stale scripts:** `draw-circle.mjs`, `creative-draw.mjs`, `verify-canvas.mjs`, and `paint-agent.mjs` still `callTool('paint_path', …)`. That tool was removed from the bridge, so the call now **returns an MCP error** for the missing tool and the scripts crash (e.g. `draw-circle.mjs` throws a `SyntaxError` trying to `JSON.parse` the `"MCP error …"` string). They also predate worm mode (scan-order paths aren't a connected chain). Until they're updated to `take_action({ type: 'GAME_PAINT_PATH', … })`, prefer `mcp-call.mjs` + `GAME_PAINT { fromCursor: true }`. See [game.md § Agent painting playbook](./game.md#agent-painting-playbook).
+> Earlier demo scripts (`draw-circle.mjs`, `creative-draw.mjs`, `verify-canvas.mjs`, `paint-agent.mjs`) were **removed** — they called the deleted `paint_path` tool and predated worm mode. Drive paints with `mcp-call.mjs` + `take_action`/`GAME_PAINT { fromCursor: true }` instead; see [game.md § Agent painting playbook](./game.md#agent-painting-playbook).
 
 **`mcp-call.mjs` — switch backend and identity (like the frontend can):**
 
@@ -277,14 +274,12 @@ node scripts/mcp-call.mjs --backend prod take_action '{"type":"GAME_PAINT","payl
 # Prerequisites: Worker on :8787, room on co-op canvas step (or run prep-canvas.mjs first)
 cd packages/mcp-server && npm run build
 
-npm run verify:canvas
-
-node scripts/prep-canvas.mjs
-node scripts/draw-circle.mjs
-node scripts/creative-draw.mjs --pattern wave --owner wave-bot@example.com --name "Wave Bot" --label "Wave Agent"
+node scripts/prep-canvas.mjs                            # presenter: step 7, reset, set grid
+node scripts/mcp-call.mjs get_state                     # read the canvas
+node scripts/mcp-call.mjs take_action '{"type":"GAME_PAINT","payload":{"x":10,"y":8,"fromCursor":true}}'  # free-paint
 ```
 
-JWT for scripts: any valid participant token (e.g. from `frontend/.env` after `./setup.sh`), or sign one locally with `JWT_SECRET` from `server/.dev.vars` (see `prep-canvas.mjs`). Each distinct `--owner` email gets its own player color.
+JWT: `mcp-call.mjs` signs a local token for you (default `loop-bot@twosmiles.ca`) or reads `frontend/.env` for `--backend prod`. For other scripts, sign one locally with `JWT_SECRET` from `server/.dev.vars` (see `prep-canvas.mjs`). Each distinct email gets its own player color.
 
 Subagents in Cursor can run these scripts via shell — that is how spiral/wave/diamond/circle demos were driven, not via Cursor's MCP settings panel.
 

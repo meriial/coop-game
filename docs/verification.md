@@ -300,18 +300,14 @@ npm install && npm run build
 # Room must be on co-op canvas (step 7) — or run prep first:
 node scripts/prep-canvas.mjs
 
-# Smoke-test all canvas tools
-npm run verify:canvas
+# Read the canvas:
+node scripts/mcp-call.mjs get_state
 
-# Agent demos
-node scripts/draw-circle.mjs
-node scripts/creative-draw.mjs --pattern spiral --owner bot@example.com --name "Spiral Bot" --label "Spiral Agent"
-
-# Switchable transport (local/prod, any identity) — free-paint a cell in worm mode:
-node scripts/mcp-call.mjs --backend prod take_action '{"type":"GAME_PAINT","payload":{"x":10,"y":8,"fromCursor":true}}'
+# Free-paint a cell anywhere (worm-mode bypass); --backend prod to hit production:
+node scripts/mcp-call.mjs take_action '{"type":"GAME_PAINT","payload":{"x":10,"y":8,"fromCursor":true}}'
 ```
 
-> ⚠️ `draw-circle.mjs`, `creative-draw.mjs`, `paint-agent.mjs`, and `verify-canvas.mjs` (i.e. `npm run verify:canvas`) still call the **removed `paint_path` tool**; the bridge returns an MCP error for it and the scripts crash (e.g. `draw-circle.mjs` throws a `SyntaxError` parsing the `"MCP error …"` string). Until updated to `take_action({ type: 'GAME_PAINT_PATH', … })`, use `mcp-call.mjs` + `GAME_PAINT { fromCursor: true }` to free-paint — see [game.md § Agent painting playbook](./game.md#agent-painting-playbook).
+> The older demo scripts (`draw-circle.mjs`, `creative-draw.mjs`, `paint-agent.mjs`, `verify-canvas.mjs`) were **removed** — they called the deleted `paint_path` tool. Drive paints with `mcp-call.mjs` + `take_action`/`GAME_PAINT { fromCursor: true }`; see [game.md § Agent painting playbook](./game.md#agent-painting-playbook).
 
 Scripts live in `packages/mcp-server/scripts/`. JWT: use section 4 token, `frontend/.env` `VITE_AGENT_TOKEN`, or sign locally with `JWT_SECRET` from `server/.dev.vars` (see `prep-canvas.mjs`).
 
@@ -423,8 +419,8 @@ From repo root: `npm run login:dev` runs the dry-run flow against `http://localh
 | Auth config (domains + repo) | `curl http://localhost:8787/auth/config \| jq` |
 | Participant setup | `./setup.sh http://localhost:8787 you@your-allowed-domain.example` |
 | Presenter UI | `http://localhost:5174/?token=<jwt>` |
-| MCP smoke test (scripted) | `cd packages/mcp-server && npm run verify:canvas` |
-| MCP agent demo | `node packages/mcp-server/scripts/draw-circle.mjs` |
+| MCP read (scripted) | `cd packages/mcp-server && node scripts/mcp-call.mjs get_state` |
+| MCP free-paint demo | `node packages/mcp-server/scripts/mcp-call.mjs take_action '{"type":"GAME_PAINT","payload":{"x":10,"y":8,"fromCursor":true}}'` |
 
 ## Troubleshooting
 

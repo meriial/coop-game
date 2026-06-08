@@ -9,8 +9,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "dev": "tsx src/index.ts",
-    "test": "vitest run",
-    "verify:canvas": "node scripts/verify-canvas.mjs"
+    "test": "vitest run"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",

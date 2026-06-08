@@ -164,7 +164,7 @@ The MCP bridge (`packages/mcp-server/`) exposes co-op-canvas-aware tools so an L
 
 > There is **no `paint_path` MCP tool** — earlier docs/builds had one, but the current bridge dropped it. Paint a path with `take_action({ type: 'GAME_PAINT_PATH', payload: { cells } })` (capped at `agentBatchMax`, one cooldown slot for the batch).
 
-You do not need Cursor MCP config to use these tools — see **[architecture.md § Poor man's MCP](./architecture.md#poor-mans-mcp-scripted-client)** for the scripted-client pattern (`mcp-call.mjs`, `draw-circle.mjs`, etc.).
+You do not need Cursor MCP config to use these tools — see **[architecture.md § Poor man's MCP](./architecture.md#poor-mans-mcp-scripted-client)** for the scripted-client pattern (`mcp-call.mjs`).
 
 ### Agent painting playbook
 
