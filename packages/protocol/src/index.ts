@@ -215,3 +215,12 @@ export interface RoomAttachment {
   isAgent?: boolean;
   agentLabel?: string;
 }
+
+/** Stable player-row id: one row per human email, one per agent label under an owner. */
+export function resolvePlayerKey(att: Pick<RoomAttachment, 'email' | 'name' | 'ownerId' | 'isAgent' | 'agentLabel'>): string {
+  if (att.isAgent && att.agentLabel) {
+    const owner = att.ownerId ?? att.email ?? att.name;
+    return `${owner}::agent::${att.agentLabel}`;
+  }
+  return att.email || att.name;
+}

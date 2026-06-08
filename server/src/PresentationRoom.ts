@@ -1,4 +1,5 @@
 import type { BgConfig, ConnectedUser, OutboundMsg, Player, RoomAttachment } from '@workshop/protocol';
+import { resolvePlayerKey } from '@workshop/protocol';
 import { createGameContext } from '@workshop/game-core/server';
 import { periodicMatchEngine, clearMatchPendingForPlayer } from '@workshop/game-periodic-match/engine';
 import { pixelHeartEngine } from '@workshop/game-pixel-heart/engine';
@@ -85,17 +86,23 @@ export class PresentationRoom {
     const displayName = isAgent && agentLabel ? `${name}'s ${agentLabel}` : name;
     const participantId = email || displayName;
 
-    if (isAgent) {
+    if (isAgent && agentLabel) {
       const activeGameId = this.getActiveGameId();
       const engine = activeGameId ? gameRegistry.get(activeGameId) : undefined;
       const cap = engine?.config?.maxAgentsPerOwner;
       if (cap !== undefined) {
-        const existing = [...this.sql.exec(
-          `SELECT COUNT(*) as cnt FROM players WHERE owner_id = ? AND is_agent = 1`,
-          ownerId,
-        )][0].cnt as number;
-        if (existing >= cap) {
-          return new Response(`Agent limit (${cap}) reached for this owner`, { status: 403 });
+        const sameLabel = [...this.sql.exec(
+          `SELECT 1 FROM players WHERE owner_id = ? AND is_agent = 1 AND agent_label = ?`,
+          ownerId, agentLabel,
+        )].length > 0;
+        if (!sameLabel) {
+          const existing = [...this.sql.exec(
+            `SELECT COUNT(*) as cnt FROM players WHERE owner_id = ? AND is_agent = 1`,
+            ownerId,
+          )][0].cnt as number;
+          if (existing >= cap) {
+            return new Response(`Agent limit (${cap}) reached for this owner`, { status: 403 });
+          }
         }
       }
     }
@@ -195,7 +202,7 @@ export class PresentationRoom {
     const engine = gameRegistry.route(msg.type);
     if (!engine) return;
 
-    const playerKey = attachment.email || attachment.name;
+    const playerKey = resolvePlayerKey(attachment);
     let player = this.getPlayerById(playerKey);
     if (!player && role === 'presenter' && PRESENTER_ONLY_GAME_TYPES.has(msg.type)) {
       player = {
@@ -222,8 +229,7 @@ export class PresentationRoom {
 
   webSocketClose(ws: WebSocket): void {
     const att = ws.deserializeAttachment() as RoomAttachment;
-    const playerKey = att.email || att.name;
-    clearMatchPendingForPlayer(this.gameCtx, playerKey);
+    clearMatchPendingForPlayer(this.gameCtx, resolvePlayerKey(att));
     this.broadcastConnectedUsers(ws);
   }
 
@@ -257,7 +263,7 @@ export class PresentationRoom {
   }
 
   private upsertPlayer(att: RoomAttachment, rawName: string): Player {
-    const playerKey = att.email || att.name;
+    const playerKey = resolvePlayerKey(att);
     this.sql.exec(`DELETE FROM players WHERE length(id) = 36 AND id LIKE '________-____-____-____-____________'`);
     const color = this.assignColor(playerKey);
     const displayName = rawName.slice(0, 30);
@@ -400,7 +406,7 @@ export class PresentationRoom {
     for (const ws of this.ctx.getWebSockets()) {
       if (ws === exclude) continue;
       const att = ws.deserializeAttachment() as RoomAttachment;
-      const key = att.email || att.name;
+      const key = resolvePlayerKey(att);
       if (seen.has(key)) continue;
       seen.add(key);
       const playerRow = [...this.sql.exec(`SELECT color FROM players WHERE id = ?`, key)];

@@ -38,7 +38,12 @@ const POWERUP_BLURBS: Record<string, string> = {
 };
 
 function myPlayerKey(snapshot: PresentationSnapshot): string {
-  return snapshot.identity.ownerId || snapshot.identity.name;
+  const id = snapshot.identity;
+  if (id.isAgent && id.agentLabel) {
+    const owner = id.ownerId || id.name;
+    return `${owner}::agent::${id.agentLabel}`;
+  }
+  return id.ownerId || id.name;
 }
 
 // Renders the canvas as a text grid the agent can reason about spatially.

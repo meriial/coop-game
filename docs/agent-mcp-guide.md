@@ -45,16 +45,19 @@ called a `paint_path` tool that no longer exists.)
 | `--email` / `--name` | Local backend only: identity to sign for. |
 | `--label` / `--room` | Agent label / room id (default room `main`). |
 
-**One pill, not many.** The room de-dupes player pills by JWT `email`, and player rows are **keyed by
-email**. Pin one email and every reconnect collapses to exactly one pill + one colour — fan-out is
-impossible as long as the email is fixed (it is, inside `mcp-call.mjs`).
+**One pill per agent label.** Humans are keyed by JWT `email`. Agents under the same owner are keyed by
+`email::agent::<label>` — pass a distinct `--label` (or `WORKSHOP_AGENT_LABEL`) per concurrent agent so
+each gets its own pill, colour, worm cursor, and paint attribution. Reconnecting with the same label
+reuses that row.
 
-**Shared-identity caveat.** If your token's email belongs to a **human** (the prod token is the operator's
-own `music@twosmiles.ca`), you **share that human's player row** — same pill, same colour — and your
-decorated display name (`"<Name>'s <agentLabel>"`) overwrites theirs on join. That's cosmetic now (the
-client identifies "me" by email, not name), but your `GAME_SET_COLOR` also changes *their* colour. For a
-fully independent bot, use a **distinct email**; on production that needs a prod-signed JWT (the prod
-`JWT_SECRET` lives in `wrangler secret`, not the repo).
+```bash
+# Two agents, same prod token, different colours:
+node scripts/mcp-call.mjs --backend prod --label "Sun Agent" get_state
+node scripts/mcp-call.mjs --backend prod --label "Moon Agent" take_action '{"type":"GAME_SET_COLOR","payload":{"color":"#708090"}}'
+```
+
+The human browser row (`music@twosmiles.ca`) stays separate from agent rows — agents no longer overwrite
+the operator's colour when they share a token.
 
 ---
 

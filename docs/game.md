@@ -179,7 +179,7 @@ Hard-won gotchas — **read this before writing an agent that paints, or your pa
 
 **3. Draw with multiple colours:** the room must be in `colorMode: 'pick'` (presenter-set). Then `take_action({ type: 'GAME_SET_COLOR', payload: { color } })` changes your colour for **future** paints (existing cells keep their stored colour). If `colorPalette` is non-empty the colour must be a member; otherwise any `#RRGGBB`. `GAME_SET_COLOR` is **not** presenter-only — any player/agent can set their own.
 
-**4. Identity = your JWT `email`.** Player rows are keyed by email. If your agent signs a token with a **human's** email, it **shares that human's row** — same pill, same colour — and its decorated display name (`"<Name>'s <agentLabel>"`) overwrites theirs on join. For an independent bot (own pill/colour), use a **distinct email**. The room de-dupes pills by email, so reconnecting with one pinned email always shows exactly one pill. See [architecture.md § Poor man's MCP](./architecture.md#poor-mans-mcp-scripted-client).
+**4. Identity = email for humans, email + agent label for agents.** Humans are keyed by JWT `email`. Agents under the same owner share the token but get separate rows via `--label` / `agentLabel` (`owner@example.com::agent::Sun Agent`), each with its own colour and worm cursor. See [agent-mcp-guide.md](./agent-mcp-guide.md).
 
 ### Future ideas (not yet implemented)
 
