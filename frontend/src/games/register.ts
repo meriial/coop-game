@@ -13,6 +13,7 @@ const EMPTY_MATCH: PeriodicMatchState = {
   matchPaused: false,
   matchScores: [],
   matchElementCount: 118,
+  matchPendingTimeoutMs: 5000,
   gameOver: false,
 };
 

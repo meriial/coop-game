@@ -30,6 +30,7 @@ const DEFAULT_STATE: WsState = {
       matchPaused: false,
       matchScores: [],
       matchElementCount: 118,
+      matchPendingTimeoutMs: 5000,
       gameOver: false,
     } satisfies MatchState,
   },
@@ -48,6 +49,7 @@ function patchPeriodicMatch(msg: Record<string, unknown>): MatchState {
     matchPaused: (msg.matchPaused as boolean) ?? false,
     matchScores: (msg.matchScores as MatchState['matchScores']) ?? [],
     matchElementCount: (msg.matchElementCount as number) ?? 118,
+    matchPendingTimeoutMs: (msg.matchPendingTimeoutMs as number) ?? 5000,
     gameOver: (msg.gameOver as boolean) ?? false,
   };
 }
