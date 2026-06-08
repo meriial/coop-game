@@ -2,37 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useWebSocket } from './hooks/useWebSocket';
 import { PresenterApp } from './PresenterApp';
 import { ParticipantApp } from './ParticipantApp';
+import { TOKEN_KEY, decodeJwtName, decodeJwtEmail, isJwtExpired } from './jwt';
 
 const WS_BASE = (import.meta.env.VITE_WS_URL as string | undefined) ||
   `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`;
-const TOKEN_KEY = 'presenter_token';
-
-function decodeJwtPayload(token: string): { name?: string; email?: string } {
-  try {
-    return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))) as { name?: string; email?: string };
-  } catch {
-    return {};
-  }
-}
-
-function decodeJwtName(token: string): string {
-  const payload = decodeJwtPayload(token);
-  return typeof payload.name === 'string' ? payload.name : 'Guest';
-}
-
-function decodeJwtEmail(token: string): string {
-  const payload = decodeJwtPayload(token);
-  return typeof payload.email === 'string' ? payload.email : '';
-}
-
-function isJwtExpired(token: string): boolean {
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))) as { exp?: number };
-    return typeof payload.exp === 'number' && Date.now() / 1000 > payload.exp;
-  } catch {
-    return false;
-  }
-}
 
 function getToken(): string | null {
   // 1. URL param (takes precedence, stored for future reloads)

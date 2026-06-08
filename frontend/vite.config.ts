@@ -2,9 +2,10 @@ import path from 'node:path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+import { devUsers } from './vite-plugin-dev-users';
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), devUsers()],
   resolve: {
     // Game plugins are file:-linked workspace packages that each import React.
     // Without dedupe, Vite resolves them to a separate React instance, which
