@@ -5,5 +5,6 @@ dist/
 *.local
 .wrangler/
 .dev.vars
+dev-users.json
 .pnpm-store/
 package-lock.json

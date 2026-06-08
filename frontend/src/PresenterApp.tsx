@@ -6,6 +6,7 @@ import type { CanvasState } from '@workshop/protocol';
 import { CanvasGridControls } from '@workshop/game-pixel-heart/grid-controls';
 import { StageRenderer } from './components/StageRenderer';
 import { useSoundContext } from './contexts/SoundContext';
+import { UserSwitcher } from './UserSwitcher';
 
 interface Props {
   state: WsState;
@@ -108,9 +109,7 @@ export function PresenterApp({ state, send, myName, myOwner, token, onToggleDevR
               <User size={13} />
             </button>
           )}
-          <div className="bg-slate-900/80 backdrop-blur-sm border border-slate-700/60 px-3 py-1.5 rounded-full text-xs text-slate-300 pointer-events-none">
-            {myName}
-          </div>
+          <UserSwitcher myName={myName} currentEmail={myOwner} />
         </div>
       </div>
 
