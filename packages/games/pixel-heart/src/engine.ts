@@ -54,7 +54,10 @@ function getConfig(ctx: GameContext): PaintConfig {
     return raw === null ? fallback : raw === 'true';
   };
   const powerupModeRaw = ctx.meta.get('paint_powerup_mode');
-  const powerupMode: PaintConfig['powerupMode'] = powerupModeRaw === 'count' ? 'count' : 'time';
+  const powerupMode: PaintConfig['powerupMode'] =
+    powerupModeRaw === 'count' ? 'count'
+    : powerupModeRaw === 'time' ? 'time'
+    : DEFAULT_PAINT_CONFIG.powerupMode;
   return {
     cols: num('paint_cols', DEFAULT_PAINT_CONFIG.cols),
     rows: num('paint_rows', DEFAULT_PAINT_CONFIG.rows),

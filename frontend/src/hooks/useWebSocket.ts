@@ -72,7 +72,7 @@ function patchCanvas(msg: Record<string, unknown>): CanvasState {
     powerups: (msg.powerups as CanvasState['powerups']) ?? [],
     effects: (msg.effects as CanvasState['effects']) ?? {},
     claims: (msg.claims as string[]) ?? [],
-    config: (msg.config as CanvasState['config']) ?? base.config,
+    config: { ...base.config, ...((msg.config as Partial<CanvasState['config']>) ?? {}) },
     wormLastPaints: (msg.wormLastPaints as CanvasState['wormLastPaints']) ?? {},
     paintsUntilNextPowerup: (msg.paintsUntilNextPowerup as number | null) ?? null,
   };

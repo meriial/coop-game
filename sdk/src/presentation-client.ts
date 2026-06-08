@@ -232,7 +232,7 @@ function extractCanvasState(msg: OutboundMsg & Partial<CanvasState>): CanvasStat
     powerups: msg.powerups ?? [],
     effects: msg.effects ?? {},
     claims: msg.claims ?? [],
-    config: msg.config ?? base.config,
+    config: { ...base.config, ...((msg.config as Partial<CanvasState['config']>) ?? {}) },
     wormLastPaints: msg.wormLastPaints ?? {},
     paintsUntilNextPowerup: msg.paintsUntilNextPowerup ?? null,
   };

@@ -77,7 +77,7 @@ export const DEFAULT_PAINT_CONFIG: PaintConfig = {
   powerupIntervalMs: 12_000,
   powerupMax: 3,
   wormMode: false,
-  powerupMode: 'time',
+  powerupMode: 'count',
   powerupPaintsPerPlayer: 3,
 };
 

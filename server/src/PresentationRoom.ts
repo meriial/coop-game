@@ -15,10 +15,13 @@ const PLAYER_COLORS = [
 const PRESENTER_ONLY_GAME_TYPES = new Set([
   'GAME_RESET',
   'GAME_CONFIG',
+  'GAME_DROP_POWERUP',
   'MATCH_PAUSE',
   'MATCH_RESET',
   'MATCH_SET_SIZE',
   'MATCH_SET_TIMEOUT',
+  'MATCH_SET_CATCHUP',
+  'MATCH_SET_SHOW_COOLDOWN',
 ]);
 
 type InboundMsg = { type: string; [key: string]: unknown };
