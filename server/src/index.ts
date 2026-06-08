@@ -10,6 +10,7 @@ interface Env {
   JWT_SECRET: string;
   ADMIN_EMAIL: string;
   ALLOWED_EMAIL_DOMAINS?: string;
+  ROOM_DOMAINS?: string;
   REPO_URL?: string;
 }
 
@@ -80,6 +81,23 @@ function isAllowedDomain(email: string, env: Env): boolean {
   return domain ? parseAllowedDomains(env.ALLOWED_EMAIL_DOMAINS).includes(domain) : false;
 }
 
+function parseRoomDomains(raw?: string): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const entry of (raw ?? '').split(',')) {
+    const colonIdx = entry.indexOf(':');
+    if (colonIdx === -1) continue;
+    const domain = entry.slice(0, colonIdx).trim().toLowerCase();
+    const room = entry.slice(colonIdx + 1).trim();
+    if (domain && room) map.set(domain, room);
+  }
+  return map;
+}
+
+function resolveRoomForEmail(email: string, env: Env): string {
+  const domain = email.split('@')[1]?.toLowerCase() ?? '';
+  return parseRoomDomains(env.ROOM_DOMAINS).get(domain) ?? 'main';
+}
+
 function titleCase(word: string): string {
   return word ? word[0].toUpperCase() + word.slice(1).toLowerCase() : word;
 }
@@ -130,7 +148,7 @@ async function createJWT(payload: Record<string, unknown>, secret: string): Prom
   return `${data}.${bytesToB64url(new Uint8Array(sig))}`;
 }
 
-async function verifyJWT(token: string, secret: string): Promise<{ email: string; name: string }> {
+async function verifyJWT(token: string, secret: string): Promise<{ email: string; name: string; room?: string }> {
   const parts = token.split('.');
   if (parts.length !== 3) throw new Error('Invalid JWT');
   const enc = new TextEncoder();
@@ -145,9 +163,9 @@ async function verifyJWT(token: string, secret: string): Promise<{ email: string
   const sigBytes = Uint8Array.from(atob(parts[2].replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
   const valid = await crypto.subtle.verify('HMAC', key, sigBytes, enc.encode(data));
   if (!valid) throw new Error('Invalid JWT signature');
-  const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'))) as { email?: string; name?: string; exp?: number };
+  const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'))) as { email?: string; name?: string; exp?: number; room?: string };
   if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) throw new Error('JWT expired');
-  return { email: payload.email ?? '', name: payload.name ?? 'Guest' };
+  return { email: payload.email ?? '', name: payload.name ?? 'Guest', room: payload.room };
 }
 
 // --- HTML Templates ---
@@ -298,8 +316,9 @@ async function handleAuthVerify(request: Request, env: Env): Promise<Response> {
   const { email } = JSON.parse(existingRaw) as { email: string };
   const name = parseName(email);
   const now = Math.floor(Date.now() / 1000);
+  const room = resolveRoomForEmail(email, env);
   const agentToken = await createJWT(
-    { email, name, iat: now, exp: now + 604800 },
+    { email, name, iat: now, exp: now + 604800, ...(room !== 'main' ? { room } : {}) },
     env.JWT_SECRET
   );
 
@@ -335,8 +354,8 @@ async function handleGuestInvite(request: Request, env: Env): Promise<Response> 
     return Response.json({ error: 'Forbidden' }, { status: 403, headers: CORS });
   }
 
-  let body: { email?: string; name?: string };
-  try { body = (await request.json()) as { email?: string; name?: string }; }
+  let body: { email?: string; name?: string; room?: string };
+  try { body = (await request.json()) as { email?: string; name?: string; room?: string }; }
   catch { return Response.json({ error: 'Invalid JSON' }, { status: 400, headers: CORS }); }
   const guestEmail = (body.email ?? '').trim();
   const guestName  = (body.name  ?? '').trim();
@@ -344,8 +363,9 @@ async function handleGuestInvite(request: Request, env: Env): Promise<Response> 
     return Response.json({ error: 'email and name are required' }, { status: 400, headers: CORS });
 
   const now = Math.floor(Date.now() / 1000);
+  const room = body.room?.trim() || resolveRoomForEmail(guestEmail, env);
   const guestToken = await createJWT(
-    { email: guestEmail, name: guestName, iat: now, exp: now + 604800 },
+    { email: guestEmail, name: guestName, iat: now, exp: now + 604800, ...(room !== 'main' ? { room } : {}) },
     env.JWT_SECRET
   );
 

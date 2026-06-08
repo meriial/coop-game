@@ -3,12 +3,13 @@
 
 export const TOKEN_KEY = 'presenter_token';
 
-export function decodeJwtPayload(token: string): { name?: string; email?: string; exp?: number } {
+export function decodeJwtPayload(token: string): { name?: string; email?: string; exp?: number; room?: string } {
   try {
     return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))) as {
       name?: string;
       email?: string;
       exp?: number;
+      room?: string;
     };
   } catch {
     return {};
@@ -23,6 +24,11 @@ export function decodeJwtName(token: string): string {
 export function decodeJwtEmail(token: string): string {
   const payload = decodeJwtPayload(token);
   return typeof payload.email === 'string' ? payload.email : '';
+}
+
+export function decodeJwtRoom(token: string): string {
+  const payload = decodeJwtPayload(token);
+  return typeof payload.room === 'string' ? payload.room : 'main';
 }
 
 export function isJwtExpired(token: string): boolean {

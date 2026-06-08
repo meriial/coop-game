@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useWebSocket } from './hooks/useWebSocket';
 import { PresenterApp } from './PresenterApp';
 import { ParticipantApp } from './ParticipantApp';
-import { TOKEN_KEY, decodeJwtName, decodeJwtEmail, isJwtExpired } from './jwt';
+import { TOKEN_KEY, decodeJwtName, decodeJwtEmail, decodeJwtRoom, isJwtExpired } from './jwt';
 
 const WS_BASE = (import.meta.env.VITE_WS_URL as string | undefined) ||
   `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`;
@@ -52,10 +52,11 @@ export function App() {
   const token = useMemo(() => getToken(), []);
   const [devRoleOverride, setDevRoleOverride] = useState<'presenter' | 'participant' | null>(null);
 
+  const room = token ? decodeJwtRoom(token) : 'main';
   const wsUrl = useMemo(() => {
-    const base = `${WS_BASE}/room/main?token=${encodeURIComponent(token ?? '')}`;
+    const base = `${WS_BASE}/room/${room}?token=${encodeURIComponent(token ?? '')}`;
     return devRoleOverride ? `${base}&devRole=${devRoleOverride}` : base;
-  }, [token, devRoleOverride]);
+  }, [token, room, devRoleOverride]);
 
   const { state, send } = useWebSocket(wsUrl, !token);
   const myName = token ? decodeJwtName(token) : 'Guest';
@@ -87,7 +88,7 @@ export function App() {
     : undefined;
 
   useEffect(() => {
-    document.title = state.role === 'presenter' ? '🎤 Presenter — DrugBank Workshop' : 'DrugBank AI Workshop';
+    document.title = state.role === 'presenter' ? '🎤 Presenter — AI Workshop' : 'AI Workshop';
   }, [state.role]);
 
   if (!token) {
