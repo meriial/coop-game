@@ -172,7 +172,7 @@ export type InboundMsg =
   | { type: 'SUBMIT_VOTE'; pollId: string; choice: string; pollType?: string }
   | { type: 'RESET_POLL'; pollId: string }
   | { type: 'GAME_JOIN'; name: string }
-  | { type: 'GAME_PAINT'; x: number; y: number; opacity?: number }
+  | { type: 'GAME_PAINT'; x: number; y: number; opacity?: number; fromCursor?: boolean }
   | { type: 'GAME_PAINT_PATH'; cells: { x: number; y: number }[] }
   | { type: 'GAME_CONFIG'; config: Partial<PaintConfig> }
   | { type: 'GAME_RESET' }

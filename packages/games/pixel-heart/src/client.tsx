@@ -122,10 +122,10 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
 
       if (e.key === ' ') {
         e.preventDefault();
-        // Spacebar paints at cursor; server validates against paint anchor (wormLastPaints).
+        // Spacebar paints at cursor — fromCursor bypasses the wormLastPaints adjacency check.
         const cur = s.wormCursors[myPlayer.id] ?? s.wormLastPaints[myPlayer.id];
         if (!cur) return;
-        send({ type: 'GAME_PAINT', x: cur.x, y: cur.y, opacity: paintOpacityRef.current });
+        send({ type: 'GAME_PAINT', x: cur.x, y: cur.y, opacity: paintOpacityRef.current, fromCursor: true });
       }
     };
     window.addEventListener('keydown', handleKeyDown);

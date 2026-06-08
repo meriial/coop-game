@@ -276,11 +276,13 @@ function maybeSpawnPowerup(ctx: GameContext, cfg: PaintConfig, now: number): voi
 
 // Applies a single paint (center + spread) and any side effects. Caller is
 // responsible for cooldown gating and broadcasting.
-function applyPaint(ctx: GameContext, player: Player, x: number, y: number, cfg: PaintConfig, now: number, opacity = 1): boolean {
+function applyPaint(ctx: GameContext, player: Player, x: number, y: number, cfg: PaintConfig, now: number, opacity = 1, fromCursor = false): boolean {
   if (x < 0 || x >= cfg.cols || y < 0 || y >= cfg.rows) return false;
 
-  // Worm mode: each paint must be within Chebyshev distance 1 of the player's last paint.
-  if (cfg.wormMode) {
+  // Worm mode: mouse clicks must be within Chebyshev distance 1 of the last paint anchor.
+  // Spacebar (fromCursor) bypasses this — the keyboard cursor can be anywhere, having
+  // moved one step at a time via arrow keys without painting in between.
+  if (cfg.wormMode && !fromCursor) {
     const lastRow = [...ctx.sql.exec(`SELECT x, y FROM paint_worm_last WHERE player_key = ?`, player.id)];
     if (lastRow.length > 0) {
       const dx = Math.abs(x - (lastRow[0].x as number));
@@ -560,7 +562,8 @@ export const pixelHeartEngine: GameEngine<CanvasState> = {
       const rawOpacity = typeof msg.opacity === 'number' ? msg.opacity : 1;
       const opacity = [0.25, 0.5, 0.75, 1.0].reduce((best, v) =>
         Math.abs(v - rawOpacity) < Math.abs(best - rawOpacity) ? v : best, 1.0);
-      const changed = applyPaint(ctx, player, x, y, cfg, now, opacity);
+      const fromCursor = msg.fromCursor === true;
+      const changed = applyPaint(ctx, player, x, y, cfg, now, opacity, fromCursor);
       if (!changed) return;
       stampCooldown(ctx, player.id, now);
       ctx.broadcast({ type: 'SYNC_CANVAS', ...buildCanvasState(ctx) });
