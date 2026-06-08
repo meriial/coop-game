@@ -148,14 +148,21 @@ function writeCell(
   let r: number, g: number, b: number, a: number;
 
   if (isCenter) {
-    if (additive && existing) {
-      r = Math.min(255, existing.r + incoming.r);
-      g = Math.min(255, existing.g + incoming.g);
-      b = Math.min(255, existing.b + incoming.b);
-    } else {
+    if (!existing) {
       r = incoming.r; g = incoming.g; b = incoming.b;
+      a = weight;
+    } else if (additive) {
+      r = Math.min(255, existing.r + Math.round(incoming.r * weight));
+      g = Math.min(255, existing.g + Math.round(incoming.g * weight));
+      b = Math.min(255, existing.b + Math.round(incoming.b * weight));
+      a = Math.min(1, existing.a + weight);
+    } else {
+      // Blend with the existing colour so partial opacity mixes rather than replaces.
+      r = lerp(existing.r, incoming.r, weight);
+      g = lerp(existing.g, incoming.g, weight);
+      b = lerp(existing.b, incoming.b, weight);
+      a = existing.a + (1 - existing.a) * weight;
     }
-    a = weight;
   } else if (!existing) {
     // Empty neighbour becomes the incoming color at partial alpha — the
     // "half-transparent" look when painting onto bare canvas.
