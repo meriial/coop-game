@@ -109,8 +109,8 @@ function pixelHeartView(snapshot: PresentationSnapshot) {
   const s = snapshot.pixelHeart;
   const myKey = myPlayerKey(snapshot);
   const myColor = s.players[myKey]?.color ?? null;
-  const myLastPaint = s.wormLastPaints[myKey] ?? null;
-  const myCursor = s.wormCursors[myKey] ?? myLastPaint;
+  const myLastPaint = s.wormLastPaints?.[myKey] ?? null;
+  const myCursor = s.wormCursors?.[myKey] ?? myLastPaint;
   const paintedCells: { x: number; y: number; color: string }[] = [];
   for (let y = 0; y < s.canvas.length; y++) {
     const row = s.canvas[y];

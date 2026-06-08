@@ -237,6 +237,7 @@ function extractCanvasState(msg: OutboundMsg & Partial<CanvasState>): CanvasStat
     claims: msg.claims ?? [],
     config: { ...base.config, ...((msg.config as Partial<CanvasState['config']>) ?? {}) },
     wormLastPaints: msg.wormLastPaints ?? {},
+    wormCursors: msg.wormCursors ?? {},
     paintsUntilNextPowerup: msg.paintsUntilNextPowerup ?? null,
   };
 }
