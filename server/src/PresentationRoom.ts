@@ -12,7 +12,14 @@ const PLAYER_COLORS = [
   '#d97706', '#7c3aed', '#0891b2', '#65a30d',
 ];
 
-const PRESENTER_ONLY_GAME_TYPES = new Set(['GAME_RESET', 'MATCH_PAUSE', 'MATCH_RESET', 'MATCH_SET_SIZE']);
+const PRESENTER_ONLY_GAME_TYPES = new Set([
+  'GAME_RESET',
+  'GAME_CONFIG',
+  'MATCH_PAUSE',
+  'MATCH_RESET',
+  'MATCH_SET_SIZE',
+  'MATCH_SET_TIMEOUT',
+]);
 
 type InboundMsg = { type: string; [key: string]: unknown };
 

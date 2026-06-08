@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import type { MatchState, CanvasState } from '@workshop/protocol';
+import { emptyCanvasState, type MatchState, type CanvasState } from '@workshop/protocol';
 
 export interface ConnectedUser { name: string; color?: string }
 
@@ -14,8 +14,6 @@ export interface WsState {
   connected: boolean;
 }
 
-const EMPTY_CANVAS: (string | null)[][] = Array.from({ length: 20 }, () => Array<string | null>(20).fill(null));
-
 const DEFAULT_STATE: WsState = {
   stepIndex: 0,
   role: 'participant',
@@ -23,7 +21,7 @@ const DEFAULT_STATE: WsState = {
   pollValues: {},
   pollResetSeq: {},
   games: {
-    'pixel-heart': { canvas: EMPTY_CANVAS, progress: 0, players: {} } satisfies CanvasState,
+    'pixel-heart': emptyCanvasState() satisfies CanvasState,
     'periodic-match': {
       matchBoard: [],
       matchClaimed: [],
@@ -55,10 +53,18 @@ function patchPeriodicMatch(msg: Record<string, unknown>): MatchState {
 }
 
 function patchCanvas(msg: Record<string, unknown>): CanvasState {
+  const base = emptyCanvasState();
   return {
-    canvas: (msg.canvas as (string | null)[][]) ?? EMPTY_CANVAS,
+    canvas: (msg.canvas as (string | null)[][]) ?? base.canvas,
+    cols: (msg.cols as number) ?? base.cols,
+    rows: (msg.rows as number) ?? base.rows,
     progress: (msg.progress as number) ?? 0,
+    harmony: (msg.harmony as number) ?? 0,
     players: (msg.players as CanvasState['players']) ?? {},
+    powerups: (msg.powerups as CanvasState['powerups']) ?? [],
+    effects: (msg.effects as CanvasState['effects']) ?? {},
+    claims: (msg.claims as string[]) ?? [],
+    config: (msg.config as CanvasState['config']) ?? base.config,
   };
 }
 

@@ -13,6 +13,32 @@ const ELEMENTS = [
   'Rf', 'Db', 'Sg', 'Bh', 'Hs', 'Mt', 'Ds', 'Rg', 'Cn', 'Nh', 'Fl', 'Mc', 'Lv', 'Ts', 'Og',
 ];
 
+const DEFAULT_PENDING_TIMEOUT_MS = 5000;
+const MIN_PENDING_TIMEOUT_SEC = 1;
+const MAX_PENDING_TIMEOUT_SEC = 60;
+const REVEAL_DURATION_MS = 1000;
+
+function getPendingTimeoutMs(ctx: GameContext): number {
+  const raw = ctx.meta.get('match_pending_timeout_ms');
+  if (!raw) return DEFAULT_PENDING_TIMEOUT_MS;
+  const parsed = parseInt(raw, 10);
+  return Number.isFinite(parsed) ? parsed : DEFAULT_PENDING_TIMEOUT_MS;
+}
+
+// Reschedules the durable-object alarm to the earliest expiry across both the
+// lone-pending tiles (camp timeout) and the revealed mismatched tiles.
+async function scheduleNextAlarm(ctx: GameContext): Promise<void> {
+  const rows = [...ctx.sql.exec(`
+    SELECT MIN(t) as next FROM (
+      SELECT MIN(expiry_ms) as t FROM match_pending
+      UNION ALL
+      SELECT MIN(expiry_ms) as t FROM match_reveal
+    )
+  `)];
+  const next = rows[0]?.next as number | null;
+  if (next) await ctx.scheduleAlarm(next);
+}
+
 function initMatchBoard(ctx: GameContext): void {
   const countRaw = ctx.meta.get('match_element_count');
   const count = countRaw
@@ -87,6 +113,7 @@ function buildMatchState(ctx: GameContext): MatchState {
     matchPaused,
     matchScores,
     matchElementCount,
+    matchPendingTimeoutMs: getPendingTimeoutMs(ctx),
     gameOver: claimedCount === matchBoard.length,
   };
 }
@@ -118,7 +145,11 @@ async function handleFlip(player: Player, pos: number, ctx: GameContext): Promis
   if (myPending.length === 0) {
     const playerReveal = [...ctx.sql.exec(`SELECT pos FROM match_reveal WHERE player_key = ?`, playerKey)];
     if (playerReveal.length > 0) return;
-    ctx.sql.exec(`INSERT OR REPLACE INTO match_pending VALUES (?, ?)`, playerKey, pos);
+    // A lone flipped tile auto-unflips after the camp timeout so players cannot
+    // sit on a revealed tile indefinitely.
+    const expiry = Date.now() + getPendingTimeoutMs(ctx);
+    ctx.sql.exec(`INSERT OR REPLACE INTO match_pending VALUES (?, ?, ?)`, playerKey, pos, expiry);
+    await scheduleNextAlarm(ctx);
   } else {
     const firstPos = myPending[0].pos as number;
     if (firstPos === pos) return;
@@ -131,12 +162,11 @@ async function handleFlip(player: Player, pos: number, ctx: GameContext): Promis
       ctx.sql.exec(`INSERT OR REPLACE INTO match_claimed VALUES (?, ?, ?)`, pos, playerKey, playerColor);
       ctx.sql.exec(`INSERT OR REPLACE INTO match_claimed VALUES (?, ?, ?)`, firstPos, playerKey, playerColor);
     } else {
-      const expiry = Date.now() + 1000;
+      const expiry = Date.now() + REVEAL_DURATION_MS;
       ctx.sql.exec(`INSERT OR REPLACE INTO match_reveal VALUES (?, ?, ?, ?)`, pos, playerColor, expiry, playerKey);
       ctx.sql.exec(`INSERT OR REPLACE INTO match_reveal VALUES (?, ?, ?, ?)`, firstPos, playerColor, expiry, playerKey);
-      const earliest = [...ctx.sql.exec(`SELECT MIN(expiry_ms) as t FROM match_reveal`)][0].t as number;
-      await ctx.scheduleAlarm(earliest);
     }
+    await scheduleNextAlarm(ctx);
   }
 
   ctx.broadcast({ type: 'SYNC_MATCH', ...buildMatchState(ctx) });
@@ -145,7 +175,7 @@ async function handleFlip(player: Player, pos: number, ctx: GameContext): Promis
 export const periodicMatchEngine: GameEngine<MatchState> = {
   id: 'periodic-match',
   config: { maxAgentsPerOwner: 1 },
-  inboundTypes: ['MATCH_FLIP', 'MATCH_PAUSE', 'MATCH_RESET', 'MATCH_SET_SIZE'],
+  inboundTypes: ['MATCH_FLIP', 'MATCH_PAUSE', 'MATCH_RESET', 'MATCH_SET_SIZE', 'MATCH_SET_TIMEOUT'],
 
   initSchema(ctx) {
     ctx.sql.exec(`
@@ -156,7 +186,7 @@ export const periodicMatchEngine: GameEngine<MatchState> = {
         pos INTEGER PRIMARY KEY, player_key TEXT NOT NULL, color TEXT NOT NULL
       );
       CREATE TABLE IF NOT EXISTS match_pending (
-        player_key TEXT PRIMARY KEY, pos INTEGER NOT NULL
+        player_key TEXT PRIMARY KEY, pos INTEGER NOT NULL, expiry_ms INTEGER NOT NULL DEFAULT 0
       );
       CREATE TABLE IF NOT EXISTS match_reveal (
         pos INTEGER PRIMARY KEY, color TEXT NOT NULL, expiry_ms INTEGER NOT NULL, player_key TEXT NOT NULL DEFAULT ''
@@ -164,6 +194,11 @@ export const periodicMatchEngine: GameEngine<MatchState> = {
     `);
     try {
       ctx.sql.exec(`ALTER TABLE match_reveal ADD COLUMN player_key TEXT NOT NULL DEFAULT ''`);
+    } catch {
+      /* already exists */
+    }
+    try {
+      ctx.sql.exec(`ALTER TABLE match_pending ADD COLUMN expiry_ms INTEGER NOT NULL DEFAULT 0`);
     } catch {
       /* already exists */
     }
@@ -196,6 +231,15 @@ export const periodicMatchEngine: GameEngine<MatchState> = {
       const count = Math.min(Math.max(5, Math.floor(msg.count as number)), ELEMENTS.length);
       ctx.meta.set('match_element_count', String(count));
       ctx.broadcast({ type: 'SYNC_MATCH', ...buildMatchState(ctx) });
+      return;
+    }
+    if (msg.type === 'MATCH_SET_TIMEOUT') {
+      const seconds = Math.min(
+        Math.max(MIN_PENDING_TIMEOUT_SEC, Math.round(msg.seconds as number)),
+        MAX_PENDING_TIMEOUT_SEC,
+      );
+      ctx.meta.set('match_pending_timeout_ms', String(seconds * 1000));
+      ctx.broadcast({ type: 'SYNC_MATCH', ...buildMatchState(ctx) });
     }
   },
 
@@ -203,13 +247,12 @@ export const periodicMatchEngine: GameEngine<MatchState> = {
     return buildMatchState(ctx);
   },
 
-  onAlarm(ctx) {
+  async onAlarm(ctx) {
     const now = Date.now();
     ctx.sql.exec(`DELETE FROM match_reveal WHERE expiry_ms <= ?`, now);
+    ctx.sql.exec(`DELETE FROM match_pending WHERE expiry_ms <= ?`, now);
     ctx.broadcast({ type: 'SYNC_MATCH', ...buildMatchState(ctx) });
-    const rows = [...ctx.sql.exec(`SELECT MIN(expiry_ms) as t FROM match_reveal`)];
-    const next = rows[0]?.t as number | null;
-    if (next) return ctx.scheduleAlarm(next);
+    await scheduleNextAlarm(ctx);
   },
 };
 

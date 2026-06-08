@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { runDurableObjectAlarm } from 'cloudflare:test';
 import {
   connectRoom,
@@ -77,6 +77,98 @@ describe('periodic-match game', () => {
     await player1.waitFor(
       (m) => m.type === 'SYNC_MATCH' && Object.keys(m.matchRevealed as object).length === 0,
     );
+  });
+
+  it('auto-unflips a lone pending tile once the camp timeout elapses', async () => {
+    const pos = 0;
+
+    player1.send({ type: 'MATCH_FLIP', pos });
+    const flipped = await player1.waitFor(
+      (m) => m.type === 'SYNC_MATCH' && (m.matchPending as Record<string, string>)[String(pos)] !== undefined,
+    );
+    expect(flipped.matchPendingTimeoutMs).toBe(5000); // default camp timeout
+
+    // Mock the clock past the camp deadline, then fire the scheduled alarm.
+    // setSystemTime propagates into the durable object, so the alarm sees the
+    // tile as expired without any real waiting.
+    const deadline = Date.now() + 5000 + 500;
+    vi.useFakeTimers();
+    vi.setSystemTime(deadline);
+    const stub = getPresentationRoomStub(roomId);
+    const ran = await runDurableObjectAlarm(stub);
+    vi.useRealTimers();
+    expect(ran).toBe(true);
+
+    const cleared = latestSyncMatch(player1)!;
+    expect(Object.keys(cleared.matchPending as object)).toHaveLength(0);
+    // The tile is neither claimed nor revealed, so it is flippable again.
+    expect((cleared.matchClaimed as (string | null)[])[pos]).toBeNull();
+    expect((cleared.matchRevealed as Record<string, string>)[String(pos)]).toBeUndefined();
+  });
+
+  it('respects the presenter-configured timeout when auto-unflipping', async () => {
+    presenter.send({ type: 'MATCH_SET_TIMEOUT', seconds: 2 });
+    await presenter.waitFor((m) => m.type === 'SYNC_MATCH' && m.matchPendingTimeoutMs === 2000);
+
+    const pos = 0;
+    const flipAt = Date.now();
+    player1.send({ type: 'MATCH_FLIP', pos });
+    await player1.waitFor(
+      (m) => m.type === 'SYNC_MATCH' && (m.matchPending as Record<string, string>)[String(pos)] !== undefined,
+    );
+
+    const stub = getPresentationRoomStub(roomId);
+
+    // Before the 2s deadline: even when the alarm fires, the tile stays flipped.
+    vi.useFakeTimers();
+    vi.setSystemTime(flipAt + 1000);
+    await runDurableObjectAlarm(stub);
+    vi.useRealTimers();
+    expect((latestSyncMatch(player1)!.matchPending as Record<string, string>)[String(pos)]).toBeDefined();
+
+    // After the 2s deadline: the tile auto-unflips.
+    vi.useFakeTimers();
+    vi.setSystemTime(flipAt + 2500);
+    await runDurableObjectAlarm(stub);
+    vi.useRealTimers();
+    expect((latestSyncMatch(player1)!.matchPending as Record<string, string>)[String(pos)]).toBeUndefined();
+  });
+
+  it('does not auto-unflip a tile that was matched within the timeout window', async () => {
+    const state = latestSyncMatch(player1)!;
+    const board = state.matchBoard as string[];
+    const [a, b] = findMatchingPair(board)!;
+
+    player1.send({ type: 'MATCH_FLIP', pos: a });
+    await player1.waitFor(
+      (m) => m.type === 'SYNC_MATCH' && (m.matchPending as Record<string, string>)[String(a)] !== undefined,
+    );
+    player1.send({ type: 'MATCH_FLIP', pos: b });
+    await player1.waitFor((m) => m.type === 'SYNC_MATCH' && (m.matchClaimed as (string | null)[])[a] !== null);
+
+    // A stale camp-timeout alarm from the first flip may still fire; it must not
+    // disturb the already-claimed pair.
+    const stub = getPresentationRoomStub(roomId);
+    await runDurableObjectAlarm(stub);
+
+    const sync = latestSyncMatch(player1)!;
+    expect((sync.matchClaimed as (string | null)[])[a]).toBeTruthy();
+    expect((sync.matchClaimed as (string | null)[])[b]).toBeTruthy();
+  });
+
+  it('lets the presenter configure the camp-unflip timeout but blocks participants', async () => {
+    const initial = latestSyncMatch(player1)!;
+    expect(initial.matchPendingTimeoutMs).toBe(5000);
+
+    presenter.send({ type: 'MATCH_SET_TIMEOUT', seconds: 10 });
+    const updated = await presenter.waitFor(
+      (m) => m.type === 'SYNC_MATCH' && m.matchPendingTimeoutMs === 10000,
+    );
+    expect(updated.matchPendingTimeoutMs).toBe(10000);
+
+    player1.send({ type: 'MATCH_SET_TIMEOUT', seconds: 30 });
+    await new Promise((r) => setTimeout(r, 200));
+    expect(latestSyncMatch(player1)!.matchPendingTimeoutMs).toBe(10000);
   });
 
   it('blocks a second player from flipping a tile already pending', async () => {

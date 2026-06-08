@@ -1,12 +1,9 @@
 import { clientGameRegistry } from '@workshop/game-core/client';
+import { emptyCanvasState } from '@workshop/protocol';
 import { PeriodicMatch } from '@workshop/game-periodic-match/client';
 import type { PeriodicMatchState } from '@workshop/game-periodic-match/types';
 import { PixelHeart } from '@workshop/game-pixel-heart/client';
 import type { PixelHeartState } from '@workshop/game-pixel-heart/types';
-
-const EMPTY_CANVAS: (string | null)[][] = Array.from({ length: 20 }, () =>
-  Array<string | null>(20).fill(null),
-);
 
 const EMPTY_MATCH: PeriodicMatchState = {
   matchBoard: [],
@@ -29,9 +26,5 @@ clientGameRegistry.register<PixelHeartState>({
   id: 'pixel-heart',
   Component: PixelHeart,
   selectState: (games) =>
-    (games['pixel-heart'] as PixelHeartState | undefined) ?? {
-      canvas: EMPTY_CANVAS,
-      progress: 0,
-      players: {},
-    },
+    (games['pixel-heart'] as PixelHeartState | undefined) ?? emptyCanvasState(),
 });

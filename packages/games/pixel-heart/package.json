@@ -6,7 +6,9 @@
   "exports": {
     "./engine": "./src/engine.ts",
     "./client": "./src/client.tsx",
-    "./types": "./src/types.ts"
+    "./types": "./src/types.ts",
+    "./grid-presets": "./src/grid-presets.ts",
+    "./grid-controls": "./src/GridControls.tsx"
   },
   "dependencies": {
     "@workshop/game-core": "file:../../game-core",

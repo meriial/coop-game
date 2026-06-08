@@ -7,17 +7,19 @@
     "workshop-mcp": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "node scripts/build.mjs",
     "dev": "tsx src/index.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "verify:canvas": "node scripts/verify-canvas.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
-    "zod": "^3.25.76",
-    "@workshop/sdk": "file:../../sdk"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^22.15.17",
+    "@workshop/sdk": "file:../../sdk",
+    "esbuild": "^0.25.5",
     "tsx": "^4.19.4",
     "typescript": "^5.7.0",
     "vitest": "^4.1.8",

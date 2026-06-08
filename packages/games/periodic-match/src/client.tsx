@@ -5,6 +5,8 @@ import { useSoundContext } from '@frontend/contexts/SoundContext';
 
 const MIN_ELEMENTS = 5;
 const MAX_ELEMENTS = 118;
+const MIN_TIMEOUT_SEC = 1;
+const MAX_TIMEOUT_SEC = 60;
 const GAP = 3;
 
 function bestCols(W: number, H: number, N: number): number {
@@ -33,6 +35,7 @@ export function PeriodicMatch({
     matchScores,
     gameOver: matchGameOver,
     matchElementCount,
+    matchPendingTimeoutMs,
   } = state;
 
   const gridRef = useRef<HTMLDivElement>(null);
@@ -103,6 +106,12 @@ export function PeriodicMatch({
     setInputVal(String(matchElementCount));
   }, [matchElementCount]);
 
+  const timeoutSeconds = Math.round(matchPendingTimeoutMs / 1000);
+  const [timeoutVal, setTimeoutVal] = useState(String(timeoutSeconds));
+  useEffect(() => {
+    setTimeoutVal(String(timeoutSeconds));
+  }, [timeoutSeconds]);
+
   useEffect(() => {
     send({ type: 'GAME_JOIN', name: myName });
   }, [send, myName]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -121,6 +130,15 @@ export function PeriodicMatch({
   const commitInput = (val: string) => {
     const n = parseInt(val, 10);
     if (!isNaN(n)) setSize(n);
+  };
+
+  const setTimeoutSecs = useCallback((s: number) => {
+    send({ type: 'MATCH_SET_TIMEOUT', seconds: Math.min(Math.max(MIN_TIMEOUT_SEC, s), MAX_TIMEOUT_SEC) });
+  }, [send]);
+
+  const commitTimeout = (val: string) => {
+    const n = parseInt(val, 10);
+    if (!isNaN(n)) setTimeoutSecs(n);
   };
 
   const totalPairs = matchBoard.length / 2;
@@ -241,6 +259,40 @@ export function PeriodicMatch({
                 </button>
               </div>
               <p className="text-slate-600 text-xs">applies on reshuffle</p>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <span className="text-slate-500 text-xs">Unflip timeout (1–60s)</span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setTimeoutSecs(timeoutSeconds - 1)}
+                  disabled={timeoutSeconds <= MIN_TIMEOUT_SEC}
+                  className="w-7 h-7 shrink-0 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-30 disabled:cursor-not-allowed text-slate-200 font-bold transition-colors flex items-center justify-center text-base leading-none"
+                >
+                  −
+                </button>
+                <input
+                  type="number"
+                  min={MIN_TIMEOUT_SEC}
+                  max={MAX_TIMEOUT_SEC}
+                  value={timeoutVal}
+                  onChange={(e) => setTimeoutVal(e.target.value)}
+                  onBlur={(e) => commitTimeout(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') commitTimeout((e.target as HTMLInputElement).value);
+                  }}
+                  className="flex-1 min-w-0 bg-slate-800 border border-slate-600 rounded-md text-center text-white text-sm font-mono font-bold focus:outline-none focus:border-indigo-500 focus:ring-1"
+                  style={{ appearance: 'textfield' } as React.CSSProperties}
+                />
+                <button
+                  onClick={() => setTimeoutSecs(timeoutSeconds + 1)}
+                  disabled={timeoutSeconds >= MAX_TIMEOUT_SEC}
+                  className="w-7 h-7 shrink-0 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-30 disabled:cursor-not-allowed text-slate-200 font-bold transition-colors flex items-center justify-center text-base leading-none"
+                >
+                  +
+                </button>
+              </div>
+              <p className="text-slate-600 text-xs">lone tile auto-unflips after this</p>
             </div>
 
             <button

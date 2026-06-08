@@ -1,0 +1,2421 @@
+{
+  "get_config": {
+    "grid": {
+      "cols": 32,
+      "rows": 18
+    },
+    "mixStrength": 0.5,
+    "cooldownMs": 150,
+    "agentBatchMax": 8,
+    "powerups": {
+      "enabled": true,
+      "intervalMs": 12000,
+      "max": 3,
+      "kinds": {
+        "bloom": "Your next few paints blend much more strongly (saturated edges).",
+        "prism": "Your color cycles through the rainbow with every paint.",
+        "supernova": "Your paints spread two cells out instead of one.",
+        "additive": "Neighbors blend by adding light, so overlaps brighten."
+      }
+    },
+    "rules": [
+      "Painting a cell fills it with your color; the 8 neighbours blend toward your color (empty neighbours become half-transparent).",
+      "Repeated paints accumulate, building gradients where colors meet.",
+      "Painting onto a power-up cell grants its blend-mode effect for a few paints. You cannot grab another until everyone else has claimed one.",
+      "Paints are rate-limited to one per 150ms; use paint_path to lay down up to 8 cells per turn."
+    ]
+  },
+  "get_state_before": {
+    "activeGameId": "pixel-heart",
+    "state": {
+      "cols": 32,
+      "rows": 18,
+      "coverage": 14,
+      "harmony": 9,
+      "config": {
+        "cols": 32,
+        "rows": 18,
+        "mixStrength": 0.5,
+        "cooldownMs": 150,
+        "agentBatchMax": 8,
+        "powerupsEnabled": true,
+        "powerupIntervalMs": 12000,
+        "powerupMax": 3
+      },
+      "myColor": "#65a30d",
+      "myEffect": null,
+      "powerupEligible": true,
+      "powerups": [
+        {
+          "id": "9d49eb52-ea0c-4017-8f1e-050399388418",
+          "x": 5,
+          "y": 9,
+          "kind": "supernova"
+        },
+        {
+          "id": "e40dae73-12e3-4d30-b3d4-2c003d319516",
+          "x": 17,
+          "y": 10,
+          "kind": "bloom"
+        },
+        {
+          "id": "f590ba32-c32c-4ea0-85f6-c3343d674494",
+          "x": 4,
+          "y": 15,
+          "kind": "additive"
+        }
+      ],
+      "players": [
+        {
+          "id": "flute+johnny@twosmiles.ca",
+          "name": "Johnny",
+          "color": "#10b981"
+        },
+        {
+          "id": "cameron+bob@twosmiles.ca",
+          "name": "Bob",
+          "color": "#f43f5e"
+        },
+        {
+          "id": "participant@twosmiles.ca",
+          "name": "Participant",
+          "color": "#7c3aed"
+        },
+        {
+          "id": "user@test.com",
+          "name": "Participant",
+          "color": "#0891b2"
+        },
+        {
+          "id": "foo+bar@twosmiles.ca",
+          "name": "Bar",
+          "color": "#d97706"
+        },
+        {
+          "id": "music@twosmiles.ca",
+          "name": "Presenter",
+          "color": "#0ea5e9"
+        },
+        {
+          "id": "agent-owner@twosmiles.ca",
+          "name": "Agent Owner's Verify Agent",
+          "color": "#65a30d"
+        }
+      ],
+      "paintedCount": 78,
+      "paintedCells": [
+        {
+          "x": 17,
+          "y": 1,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 18,
+          "y": 1,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 19,
+          "y": 1,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 17,
+          "y": 2,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 18,
+          "y": 2,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 19,
+          "y": 2,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 17,
+          "y": 3,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 18,
+          "y": 3,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 19,
+          "y": 3,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 11,
+          "y": 4,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 12,
+          "y": 4,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 13,
+          "y": 4,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 7,
+          "y": 5,
+          "color": "rgba(14, 165, 233, 0.5)"
+        },
+        {
+          "x": 8,
+          "y": 5,
+          "color": "rgba(14, 165, 233, 0.75)"
+        },
+        {
+          "x": 9,
+          "y": 5,
+          "color": "rgba(14, 165, 233, 0.875)"
+        },
+        {
+          "x": 10,
+          "y": 5,
+          "color": "rgba(14, 165, 233, 0.75)"
+        },
+        {
+          "x": 11,
+          "y": 5,
+          "color": "rgba(167, 131, 63, 0.875)"
+        },
+        {
+          "x": 12,
+          "y": 5,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 13,
+          "y": 5,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 16,
+          "y": 5,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 17,
+          "y": 5,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 18,
+          "y": 5,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 7,
+          "y": 6,
+          "color": "rgba(14, 165, 233, 0.5)"
+        },
+        {
+          "x": 8,
+          "y": 6,
+          "color": "rgba(14, 165, 233, 1)"
+        },
+        {
+          "x": 9,
+          "y": 6,
+          "color": "rgba(14, 165, 233, 1)"
+        },
+        {
+          "x": 10,
+          "y": 6,
+          "color": "rgba(14, 165, 233, 1)"
+        },
+        {
+          "x": 11,
+          "y": 6,
+          "color": "rgba(167, 131, 63, 0.875)"
+        },
+        {
+          "x": 12,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 13,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.875)"
+        },
+        {
+          "x": 14,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 15,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 16,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.963)"
+        },
+        {
+          "x": 17,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 18,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.925)"
+        },
+        {
+          "x": 19,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 20,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 7,
+          "y": 7,
+          "color": "rgba(14, 165, 233, 0.5)"
+        },
+        {
+          "x": 8,
+          "y": 7,
+          "color": "rgba(14, 165, 233, 0.938)"
+        },
+        {
+          "x": 9,
+          "y": 7,
+          "color": "rgba(14, 165, 233, 1)"
+        },
+        {
+          "x": 10,
+          "y": 7,
+          "color": "rgba(14, 165, 233, 0.938)"
+        },
+        {
+          "x": 11,
+          "y": 7,
+          "color": "rgba(109, 153, 67, 0.875)"
+        },
+        {
+          "x": 12,
+          "y": 7,
+          "color": "rgba(159, 141, 10, 0.875)"
+        },
+        {
+          "x": 13,
+          "y": 7,
+          "color": "rgba(159, 141, 10, 1)"
+        },
+        {
+          "x": 14,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 15,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 16,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 17,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 0.925)"
+        },
+        {
+          "x": 18,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 0.925)"
+        },
+        {
+          "x": 19,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 20,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 8,
+          "y": 8,
+          "color": "rgba(14, 165, 233, 0.75)"
+        },
+        {
+          "x": 9,
+          "y": 8,
+          "color": "rgba(14, 165, 233, 1)"
+        },
+        {
+          "x": 10,
+          "y": 8,
+          "color": "rgba(14, 165, 233, 0.75)"
+        },
+        {
+          "x": 11,
+          "y": 8,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 12,
+          "y": 8,
+          "color": "rgba(101, 163, 13, 1)"
+        },
+        {
+          "x": 13,
+          "y": 8,
+          "color": "rgba(159, 141, 10, 0.75)"
+        },
+        {
+          "x": 14,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 15,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 16,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 17,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 18,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 19,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 20,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 8,
+          "y": 9,
+          "color": "rgba(14, 165, 233, 0.5)"
+        },
+        {
+          "x": 9,
+          "y": 9,
+          "color": "rgba(14, 165, 233, 0.5)"
+        },
+        {
+          "x": 10,
+          "y": 9,
+          "color": "rgba(14, 165, 233, 0.5)"
+        },
+        {
+          "x": 11,
+          "y": 9,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 12,
+          "y": 9,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 13,
+          "y": 9,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 19,
+          "y": 9,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 20,
+          "y": 9,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 21,
+          "y": 9,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 19,
+          "y": 10,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 20,
+          "y": 10,
+          "color": "rgba(101, 163, 13, 1)"
+        },
+        {
+          "x": 21,
+          "y": 10,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 19,
+          "y": 11,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 20,
+          "y": 11,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 21,
+          "y": 11,
+          "color": "rgba(101, 163, 13, 0.5)"
+        }
+      ]
+    },
+    "identity": {
+      "name": "Agent Owner's Verify Agent",
+      "ownerId": "agent-owner@twosmiles.ca",
+      "isAgent": true,
+      "agentLabel": "Verify Agent"
+    },
+    "version": 3,
+    "stepIndex": 7
+  },
+  "paint": {
+    "sent": {
+      "type": "GAME_PAINT",
+      "x": 12,
+      "y": 8
+    },
+    "state": {
+      "cols": 32,
+      "rows": 18,
+      "coverage": 14,
+      "harmony": 9,
+      "config": {
+        "cols": 32,
+        "rows": 18,
+        "mixStrength": 0.5,
+        "cooldownMs": 150,
+        "agentBatchMax": 8,
+        "powerupsEnabled": true,
+        "powerupIntervalMs": 12000,
+        "powerupMax": 3
+      },
+      "myColor": "#65a30d",
+      "myEffect": null,
+      "powerupEligible": true,
+      "powerups": [
+        {
+          "id": "9d49eb52-ea0c-4017-8f1e-050399388418",
+          "x": 5,
+          "y": 9,
+          "kind": "supernova"
+        },
+        {
+          "id": "e40dae73-12e3-4d30-b3d4-2c003d319516",
+          "x": 17,
+          "y": 10,
+          "kind": "bloom"
+        },
+        {
+          "id": "f590ba32-c32c-4ea0-85f6-c3343d674494",
+          "x": 4,
+          "y": 15,
+          "kind": "additive"
+        }
+      ],
+      "players": [
+        {
+          "id": "flute+johnny@twosmiles.ca",
+          "name": "Johnny",
+          "color": "#10b981"
+        },
+        {
+          "id": "cameron+bob@twosmiles.ca",
+          "name": "Bob",
+          "color": "#f43f5e"
+        },
+        {
+          "id": "participant@twosmiles.ca",
+          "name": "Participant",
+          "color": "#7c3aed"
+        },
+        {
+          "id": "user@test.com",
+          "name": "Participant",
+          "color": "#0891b2"
+        },
+        {
+          "id": "foo+bar@twosmiles.ca",
+          "name": "Bar",
+          "color": "#d97706"
+        },
+        {
+          "id": "music@twosmiles.ca",
+          "name": "Presenter",
+          "color": "#0ea5e9"
+        },
+        {
+          "id": "agent-owner@twosmiles.ca",
+          "name": "Agent Owner's Verify Agent",
+          "color": "#65a30d"
+        }
+      ],
+      "paintedCount": 78,
+      "paintedCells": [
+        {
+          "x": 17,
+          "y": 1,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 18,
+          "y": 1,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 19,
+          "y": 1,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 17,
+          "y": 2,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 18,
+          "y": 2,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 19,
+          "y": 2,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 17,
+          "y": 3,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 18,
+          "y": 3,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 19,
+          "y": 3,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 11,
+          "y": 4,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 12,
+          "y": 4,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 13,
+          "y": 4,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 7,
+          "y": 5,
+          "color": "rgba(14, 165, 233, 0.5)"
+        },
+        {
+          "x": 8,
+          "y": 5,
+          "color": "rgba(14, 165, 233, 0.75)"
+        },
+        {
+          "x": 9,
+          "y": 5,
+          "color": "rgba(14, 165, 233, 0.875)"
+        },
+        {
+          "x": 10,
+          "y": 5,
+          "color": "rgba(14, 165, 233, 0.75)"
+        },
+        {
+          "x": 11,
+          "y": 5,
+          "color": "rgba(167, 131, 63, 0.875)"
+        },
+        {
+          "x": 12,
+          "y": 5,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 13,
+          "y": 5,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 16,
+          "y": 5,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 17,
+          "y": 5,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 18,
+          "y": 5,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 7,
+          "y": 6,
+          "color": "rgba(14, 165, 233, 0.5)"
+        },
+        {
+          "x": 8,
+          "y": 6,
+          "color": "rgba(14, 165, 233, 1)"
+        },
+        {
+          "x": 9,
+          "y": 6,
+          "color": "rgba(14, 165, 233, 1)"
+        },
+        {
+          "x": 10,
+          "y": 6,
+          "color": "rgba(14, 165, 233, 1)"
+        },
+        {
+          "x": 11,
+          "y": 6,
+          "color": "rgba(167, 131, 63, 0.875)"
+        },
+        {
+          "x": 12,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 13,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.875)"
+        },
+        {
+          "x": 14,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 15,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 16,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.963)"
+        },
+        {
+          "x": 17,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 18,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.925)"
+        },
+        {
+          "x": 19,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 20,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 7,
+          "y": 7,
+          "color": "rgba(14, 165, 233, 0.5)"
+        },
+        {
+          "x": 8,
+          "y": 7,
+          "color": "rgba(14, 165, 233, 0.938)"
+        },
+        {
+          "x": 9,
+          "y": 7,
+          "color": "rgba(14, 165, 233, 1)"
+        },
+        {
+          "x": 10,
+          "y": 7,
+          "color": "rgba(14, 165, 233, 0.938)"
+        },
+        {
+          "x": 11,
+          "y": 7,
+          "color": "rgba(105, 158, 40, 0.938)"
+        },
+        {
+          "x": 12,
+          "y": 7,
+          "color": "rgba(130, 152, 12, 0.938)"
+        },
+        {
+          "x": 13,
+          "y": 7,
+          "color": "rgba(130, 152, 12, 1)"
+        },
+        {
+          "x": 14,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 15,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 16,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 17,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 0.925)"
+        },
+        {
+          "x": 18,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 0.925)"
+        },
+        {
+          "x": 19,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 20,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 8,
+          "y": 8,
+          "color": "rgba(14, 165, 233, 0.75)"
+        },
+        {
+          "x": 9,
+          "y": 8,
+          "color": "rgba(14, 165, 233, 1)"
+        },
+        {
+          "x": 10,
+          "y": 8,
+          "color": "rgba(14, 165, 233, 0.75)"
+        },
+        {
+          "x": 11,
+          "y": 8,
+          "color": "rgba(101, 163, 13, 0.75)"
+        },
+        {
+          "x": 12,
+          "y": 8,
+          "color": "rgba(101, 163, 13, 1)"
+        },
+        {
+          "x": 13,
+          "y": 8,
+          "color": "rgba(130, 152, 12, 0.875)"
+        },
+        {
+          "x": 14,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 15,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 16,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 17,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 18,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 19,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 20,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 8,
+          "y": 9,
+          "color": "rgba(14, 165, 233, 0.5)"
+        },
+        {
+          "x": 9,
+          "y": 9,
+          "color": "rgba(14, 165, 233, 0.5)"
+        },
+        {
+          "x": 10,
+          "y": 9,
+          "color": "rgba(14, 165, 233, 0.5)"
+        },
+        {
+          "x": 11,
+          "y": 9,
+          "color": "rgba(101, 163, 13, 0.75)"
+        },
+        {
+          "x": 12,
+          "y": 9,
+          "color": "rgba(101, 163, 13, 0.75)"
+        },
+        {
+          "x": 13,
+          "y": 9,
+          "color": "rgba(101, 163, 13, 0.75)"
+        },
+        {
+          "x": 19,
+          "y": 9,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 20,
+          "y": 9,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 21,
+          "y": 9,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 19,
+          "y": 10,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 20,
+          "y": 10,
+          "color": "rgba(101, 163, 13, 1)"
+        },
+        {
+          "x": 21,
+          "y": 10,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 19,
+          "y": 11,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 20,
+          "y": 11,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 21,
+          "y": 11,
+          "color": "rgba(101, 163, 13, 0.5)"
+        }
+      ]
+    },
+    "version": 4
+  },
+  "paint_path": {
+    "sent": {
+      "type": "GAME_PAINT_PATH",
+      "count": 4
+    },
+    "state": {
+      "cols": 32,
+      "rows": 18,
+      "coverage": 14,
+      "harmony": 9,
+      "config": {
+        "cols": 32,
+        "rows": 18,
+        "mixStrength": 0.5,
+        "cooldownMs": 150,
+        "agentBatchMax": 8,
+        "powerupsEnabled": true,
+        "powerupIntervalMs": 12000,
+        "powerupMax": 3
+      },
+      "myColor": "#65a30d",
+      "myEffect": null,
+      "powerupEligible": true,
+      "powerups": [
+        {
+          "id": "9d49eb52-ea0c-4017-8f1e-050399388418",
+          "x": 5,
+          "y": 9,
+          "kind": "supernova"
+        },
+        {
+          "id": "e40dae73-12e3-4d30-b3d4-2c003d319516",
+          "x": 17,
+          "y": 10,
+          "kind": "bloom"
+        },
+        {
+          "id": "f590ba32-c32c-4ea0-85f6-c3343d674494",
+          "x": 4,
+          "y": 15,
+          "kind": "additive"
+        }
+      ],
+      "players": [
+        {
+          "id": "flute+johnny@twosmiles.ca",
+          "name": "Johnny",
+          "color": "#10b981"
+        },
+        {
+          "id": "cameron+bob@twosmiles.ca",
+          "name": "Bob",
+          "color": "#f43f5e"
+        },
+        {
+          "id": "participant@twosmiles.ca",
+          "name": "Participant",
+          "color": "#7c3aed"
+        },
+        {
+          "id": "user@test.com",
+          "name": "Participant",
+          "color": "#0891b2"
+        },
+        {
+          "id": "foo+bar@twosmiles.ca",
+          "name": "Bar",
+          "color": "#d97706"
+        },
+        {
+          "id": "music@twosmiles.ca",
+          "name": "Presenter",
+          "color": "#0ea5e9"
+        },
+        {
+          "id": "agent-owner@twosmiles.ca",
+          "name": "Agent Owner's Verify Agent",
+          "color": "#65a30d"
+        }
+      ],
+      "paintedCount": 78,
+      "paintedCells": [
+        {
+          "x": 17,
+          "y": 1,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 18,
+          "y": 1,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 19,
+          "y": 1,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 17,
+          "y": 2,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 18,
+          "y": 2,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 19,
+          "y": 2,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 17,
+          "y": 3,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 18,
+          "y": 3,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 19,
+          "y": 3,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 11,
+          "y": 4,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 12,
+          "y": 4,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 13,
+          "y": 4,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 7,
+          "y": 5,
+          "color": "rgba(14, 165, 233, 0.5)"
+        },
+        {
+          "x": 8,
+          "y": 5,
+          "color": "rgba(14, 165, 233, 0.75)"
+        },
+        {
+          "x": 9,
+          "y": 5,
+          "color": "rgba(14, 165, 233, 0.875)"
+        },
+        {
+          "x": 10,
+          "y": 5,
+          "color": "rgba(14, 165, 233, 0.75)"
+        },
+        {
+          "x": 11,
+          "y": 5,
+          "color": "rgba(167, 131, 63, 0.875)"
+        },
+        {
+          "x": 12,
+          "y": 5,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 13,
+          "y": 5,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 16,
+          "y": 5,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 17,
+          "y": 5,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 18,
+          "y": 5,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 7,
+          "y": 6,
+          "color": "rgba(14, 165, 233, 0.5)"
+        },
+        {
+          "x": 8,
+          "y": 6,
+          "color": "rgba(14, 165, 233, 1)"
+        },
+        {
+          "x": 9,
+          "y": 6,
+          "color": "rgba(14, 165, 233, 1)"
+        },
+        {
+          "x": 10,
+          "y": 6,
+          "color": "rgba(14, 165, 233, 1)"
+        },
+        {
+          "x": 11,
+          "y": 6,
+          "color": "rgba(167, 131, 63, 0.875)"
+        },
+        {
+          "x": 12,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 13,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.875)"
+        },
+        {
+          "x": 14,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 15,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 16,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.963)"
+        },
+        {
+          "x": 17,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 18,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.925)"
+        },
+        {
+          "x": 19,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 20,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 7,
+          "y": 7,
+          "color": "rgba(14, 165, 233, 0.5)"
+        },
+        {
+          "x": 8,
+          "y": 7,
+          "color": "rgba(14, 165, 233, 0.938)"
+        },
+        {
+          "x": 9,
+          "y": 7,
+          "color": "rgba(14, 165, 233, 1)"
+        },
+        {
+          "x": 10,
+          "y": 7,
+          "color": "rgba(14, 165, 233, 0.938)"
+        },
+        {
+          "x": 11,
+          "y": 7,
+          "color": "rgba(105, 158, 40, 0.938)"
+        },
+        {
+          "x": 12,
+          "y": 7,
+          "color": "rgba(130, 152, 12, 0.938)"
+        },
+        {
+          "x": 13,
+          "y": 7,
+          "color": "rgba(130, 152, 12, 1)"
+        },
+        {
+          "x": 14,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 15,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 16,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 17,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 0.925)"
+        },
+        {
+          "x": 18,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 0.925)"
+        },
+        {
+          "x": 19,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 20,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 8,
+          "y": 8,
+          "color": "rgba(14, 165, 233, 0.75)"
+        },
+        {
+          "x": 9,
+          "y": 8,
+          "color": "rgba(14, 165, 233, 1)"
+        },
+        {
+          "x": 10,
+          "y": 8,
+          "color": "rgba(14, 165, 233, 0.75)"
+        },
+        {
+          "x": 11,
+          "y": 8,
+          "color": "rgba(101, 163, 13, 0.75)"
+        },
+        {
+          "x": 12,
+          "y": 8,
+          "color": "rgba(101, 163, 13, 1)"
+        },
+        {
+          "x": 13,
+          "y": 8,
+          "color": "rgba(130, 152, 12, 0.875)"
+        },
+        {
+          "x": 14,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 15,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 16,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 17,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 18,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 19,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 20,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 8,
+          "y": 9,
+          "color": "rgba(14, 165, 233, 0.5)"
+        },
+        {
+          "x": 9,
+          "y": 9,
+          "color": "rgba(14, 165, 233, 0.5)"
+        },
+        {
+          "x": 10,
+          "y": 9,
+          "color": "rgba(14, 165, 233, 0.5)"
+        },
+        {
+          "x": 11,
+          "y": 9,
+          "color": "rgba(101, 163, 13, 0.75)"
+        },
+        {
+          "x": 12,
+          "y": 9,
+          "color": "rgba(101, 163, 13, 0.75)"
+        },
+        {
+          "x": 13,
+          "y": 9,
+          "color": "rgba(101, 163, 13, 0.75)"
+        },
+        {
+          "x": 19,
+          "y": 9,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 20,
+          "y": 9,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 21,
+          "y": 9,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 19,
+          "y": 10,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 20,
+          "y": 10,
+          "color": "rgba(101, 163, 13, 1)"
+        },
+        {
+          "x": 21,
+          "y": 10,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 19,
+          "y": 11,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 20,
+          "y": 11,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 21,
+          "y": 11,
+          "color": "rgba(101, 163, 13, 0.5)"
+        }
+      ]
+    },
+    "version": 4
+  },
+  "wait_for_update": {
+    "activeGameId": "pixel-heart",
+    "state": {
+      "cols": 32,
+      "rows": 18,
+      "coverage": 14,
+      "harmony": 9,
+      "config": {
+        "cols": 32,
+        "rows": 18,
+        "mixStrength": 0.5,
+        "cooldownMs": 150,
+        "agentBatchMax": 8,
+        "powerupsEnabled": true,
+        "powerupIntervalMs": 12000,
+        "powerupMax": 3
+      },
+      "myColor": "#65a30d",
+      "myEffect": null,
+      "powerupEligible": true,
+      "powerups": [
+        {
+          "id": "9d49eb52-ea0c-4017-8f1e-050399388418",
+          "x": 5,
+          "y": 9,
+          "kind": "supernova"
+        },
+        {
+          "id": "e40dae73-12e3-4d30-b3d4-2c003d319516",
+          "x": 17,
+          "y": 10,
+          "kind": "bloom"
+        },
+        {
+          "id": "f590ba32-c32c-4ea0-85f6-c3343d674494",
+          "x": 4,
+          "y": 15,
+          "kind": "additive"
+        }
+      ],
+      "players": [
+        {
+          "id": "flute+johnny@twosmiles.ca",
+          "name": "Johnny",
+          "color": "#10b981"
+        },
+        {
+          "id": "cameron+bob@twosmiles.ca",
+          "name": "Bob",
+          "color": "#f43f5e"
+        },
+        {
+          "id": "participant@twosmiles.ca",
+          "name": "Participant",
+          "color": "#7c3aed"
+        },
+        {
+          "id": "user@test.com",
+          "name": "Participant",
+          "color": "#0891b2"
+        },
+        {
+          "id": "foo+bar@twosmiles.ca",
+          "name": "Bar",
+          "color": "#d97706"
+        },
+        {
+          "id": "music@twosmiles.ca",
+          "name": "Presenter",
+          "color": "#0ea5e9"
+        },
+        {
+          "id": "agent-owner@twosmiles.ca",
+          "name": "Agent Owner's Verify Agent",
+          "color": "#65a30d"
+        }
+      ],
+      "paintedCount": 78,
+      "paintedCells": [
+        {
+          "x": 17,
+          "y": 1,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 18,
+          "y": 1,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 19,
+          "y": 1,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 17,
+          "y": 2,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 18,
+          "y": 2,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 19,
+          "y": 2,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 17,
+          "y": 3,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 18,
+          "y": 3,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 19,
+          "y": 3,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 11,
+          "y": 4,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 12,
+          "y": 4,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 13,
+          "y": 4,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 7,
+          "y": 5,
+          "color": "rgba(14, 165, 233, 0.5)"
+        },
+        {
+          "x": 8,
+          "y": 5,
+          "color": "rgba(14, 165, 233, 0.75)"
+        },
+        {
+          "x": 9,
+          "y": 5,
+          "color": "rgba(14, 165, 233, 0.875)"
+        },
+        {
+          "x": 10,
+          "y": 5,
+          "color": "rgba(14, 165, 233, 0.75)"
+        },
+        {
+          "x": 11,
+          "y": 5,
+          "color": "rgba(167, 131, 63, 0.875)"
+        },
+        {
+          "x": 12,
+          "y": 5,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 13,
+          "y": 5,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 16,
+          "y": 5,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 17,
+          "y": 5,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 18,
+          "y": 5,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 7,
+          "y": 6,
+          "color": "rgba(14, 165, 233, 0.5)"
+        },
+        {
+          "x": 8,
+          "y": 6,
+          "color": "rgba(14, 165, 233, 1)"
+        },
+        {
+          "x": 9,
+          "y": 6,
+          "color": "rgba(14, 165, 233, 1)"
+        },
+        {
+          "x": 10,
+          "y": 6,
+          "color": "rgba(14, 165, 233, 1)"
+        },
+        {
+          "x": 11,
+          "y": 6,
+          "color": "rgba(167, 131, 63, 0.875)"
+        },
+        {
+          "x": 12,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 13,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.875)"
+        },
+        {
+          "x": 14,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 15,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 16,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.963)"
+        },
+        {
+          "x": 17,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 18,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.925)"
+        },
+        {
+          "x": 19,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 20,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 7,
+          "y": 7,
+          "color": "rgba(14, 165, 233, 0.5)"
+        },
+        {
+          "x": 8,
+          "y": 7,
+          "color": "rgba(14, 165, 233, 0.938)"
+        },
+        {
+          "x": 9,
+          "y": 7,
+          "color": "rgba(14, 165, 233, 1)"
+        },
+        {
+          "x": 10,
+          "y": 7,
+          "color": "rgba(14, 165, 233, 0.938)"
+        },
+        {
+          "x": 11,
+          "y": 7,
+          "color": "rgba(105, 158, 40, 0.938)"
+        },
+        {
+          "x": 12,
+          "y": 7,
+          "color": "rgba(130, 152, 12, 0.938)"
+        },
+        {
+          "x": 13,
+          "y": 7,
+          "color": "rgba(130, 152, 12, 1)"
+        },
+        {
+          "x": 14,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 15,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 16,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 17,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 0.925)"
+        },
+        {
+          "x": 18,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 0.925)"
+        },
+        {
+          "x": 19,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 20,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 8,
+          "y": 8,
+          "color": "rgba(14, 165, 233, 0.75)"
+        },
+        {
+          "x": 9,
+          "y": 8,
+          "color": "rgba(14, 165, 233, 1)"
+        },
+        {
+          "x": 10,
+          "y": 8,
+          "color": "rgba(14, 165, 233, 0.75)"
+        },
+        {
+          "x": 11,
+          "y": 8,
+          "color": "rgba(101, 163, 13, 0.75)"
+        },
+        {
+          "x": 12,
+          "y": 8,
+          "color": "rgba(101, 163, 13, 1)"
+        },
+        {
+          "x": 13,
+          "y": 8,
+          "color": "rgba(130, 152, 12, 0.875)"
+        },
+        {
+          "x": 14,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 15,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 16,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 17,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 18,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 19,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 20,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 8,
+          "y": 9,
+          "color": "rgba(14, 165, 233, 0.5)"
+        },
+        {
+          "x": 9,
+          "y": 9,
+          "color": "rgba(14, 165, 233, 0.5)"
+        },
+        {
+          "x": 10,
+          "y": 9,
+          "color": "rgba(14, 165, 233, 0.5)"
+        },
+        {
+          "x": 11,
+          "y": 9,
+          "color": "rgba(101, 163, 13, 0.75)"
+        },
+        {
+          "x": 12,
+          "y": 9,
+          "color": "rgba(101, 163, 13, 0.75)"
+        },
+        {
+          "x": 13,
+          "y": 9,
+          "color": "rgba(101, 163, 13, 0.75)"
+        },
+        {
+          "x": 19,
+          "y": 9,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 20,
+          "y": 9,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 21,
+          "y": 9,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 19,
+          "y": 10,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 20,
+          "y": 10,
+          "color": "rgba(101, 163, 13, 1)"
+        },
+        {
+          "x": 21,
+          "y": 10,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 19,
+          "y": 11,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 20,
+          "y": 11,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 21,
+          "y": 11,
+          "color": "rgba(101, 163, 13, 0.5)"
+        }
+      ]
+    },
+    "identity": {
+      "name": "Agent Owner's Verify Agent",
+      "ownerId": "agent-owner@twosmiles.ca",
+      "isAgent": true,
+      "agentLabel": "Verify Agent"
+    },
+    "version": 4,
+    "timedOut": true
+  },
+  "get_state_after": {
+    "activeGameId": "pixel-heart",
+    "state": {
+      "cols": 32,
+      "rows": 18,
+      "coverage": 14,
+      "harmony": 9,
+      "config": {
+        "cols": 32,
+        "rows": 18,
+        "mixStrength": 0.5,
+        "cooldownMs": 150,
+        "agentBatchMax": 8,
+        "powerupsEnabled": true,
+        "powerupIntervalMs": 12000,
+        "powerupMax": 3
+      },
+      "myColor": "#65a30d",
+      "myEffect": null,
+      "powerupEligible": true,
+      "powerups": [
+        {
+          "id": "9d49eb52-ea0c-4017-8f1e-050399388418",
+          "x": 5,
+          "y": 9,
+          "kind": "supernova"
+        },
+        {
+          "id": "e40dae73-12e3-4d30-b3d4-2c003d319516",
+          "x": 17,
+          "y": 10,
+          "kind": "bloom"
+        },
+        {
+          "id": "f590ba32-c32c-4ea0-85f6-c3343d674494",
+          "x": 4,
+          "y": 15,
+          "kind": "additive"
+        }
+      ],
+      "players": [
+        {
+          "id": "flute+johnny@twosmiles.ca",
+          "name": "Johnny",
+          "color": "#10b981"
+        },
+        {
+          "id": "cameron+bob@twosmiles.ca",
+          "name": "Bob",
+          "color": "#f43f5e"
+        },
+        {
+          "id": "participant@twosmiles.ca",
+          "name": "Participant",
+          "color": "#7c3aed"
+        },
+        {
+          "id": "user@test.com",
+          "name": "Participant",
+          "color": "#0891b2"
+        },
+        {
+          "id": "foo+bar@twosmiles.ca",
+          "name": "Bar",
+          "color": "#d97706"
+        },
+        {
+          "id": "music@twosmiles.ca",
+          "name": "Presenter",
+          "color": "#0ea5e9"
+        },
+        {
+          "id": "agent-owner@twosmiles.ca",
+          "name": "Agent Owner's Verify Agent",
+          "color": "#65a30d"
+        }
+      ],
+      "paintedCount": 78,
+      "paintedCells": [
+        {
+          "x": 17,
+          "y": 1,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 18,
+          "y": 1,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 19,
+          "y": 1,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 17,
+          "y": 2,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 18,
+          "y": 2,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 19,
+          "y": 2,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 17,
+          "y": 3,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 18,
+          "y": 3,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 19,
+          "y": 3,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 11,
+          "y": 4,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 12,
+          "y": 4,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 13,
+          "y": 4,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 7,
+          "y": 5,
+          "color": "rgba(14, 165, 233, 0.5)"
+        },
+        {
+          "x": 8,
+          "y": 5,
+          "color": "rgba(14, 165, 233, 0.75)"
+        },
+        {
+          "x": 9,
+          "y": 5,
+          "color": "rgba(14, 165, 233, 0.875)"
+        },
+        {
+          "x": 10,
+          "y": 5,
+          "color": "rgba(14, 165, 233, 0.75)"
+        },
+        {
+          "x": 11,
+          "y": 5,
+          "color": "rgba(167, 131, 63, 0.875)"
+        },
+        {
+          "x": 12,
+          "y": 5,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 13,
+          "y": 5,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 16,
+          "y": 5,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 17,
+          "y": 5,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 18,
+          "y": 5,
+          "color": "rgba(217, 119, 6, 0.85)"
+        },
+        {
+          "x": 7,
+          "y": 6,
+          "color": "rgba(14, 165, 233, 0.5)"
+        },
+        {
+          "x": 8,
+          "y": 6,
+          "color": "rgba(14, 165, 233, 1)"
+        },
+        {
+          "x": 9,
+          "y": 6,
+          "color": "rgba(14, 165, 233, 1)"
+        },
+        {
+          "x": 10,
+          "y": 6,
+          "color": "rgba(14, 165, 233, 1)"
+        },
+        {
+          "x": 11,
+          "y": 6,
+          "color": "rgba(167, 131, 63, 0.875)"
+        },
+        {
+          "x": 12,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 13,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.875)"
+        },
+        {
+          "x": 14,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 15,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 16,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.963)"
+        },
+        {
+          "x": 17,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 18,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.925)"
+        },
+        {
+          "x": 19,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 20,
+          "y": 6,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 7,
+          "y": 7,
+          "color": "rgba(14, 165, 233, 0.5)"
+        },
+        {
+          "x": 8,
+          "y": 7,
+          "color": "rgba(14, 165, 233, 0.938)"
+        },
+        {
+          "x": 9,
+          "y": 7,
+          "color": "rgba(14, 165, 233, 1)"
+        },
+        {
+          "x": 10,
+          "y": 7,
+          "color": "rgba(14, 165, 233, 0.938)"
+        },
+        {
+          "x": 11,
+          "y": 7,
+          "color": "rgba(105, 158, 40, 0.938)"
+        },
+        {
+          "x": 12,
+          "y": 7,
+          "color": "rgba(130, 152, 12, 0.938)"
+        },
+        {
+          "x": 13,
+          "y": 7,
+          "color": "rgba(130, 152, 12, 1)"
+        },
+        {
+          "x": 14,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 15,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 16,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 17,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 0.925)"
+        },
+        {
+          "x": 18,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 0.925)"
+        },
+        {
+          "x": 19,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 1)"
+        },
+        {
+          "x": 20,
+          "y": 7,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 8,
+          "y": 8,
+          "color": "rgba(14, 165, 233, 0.75)"
+        },
+        {
+          "x": 9,
+          "y": 8,
+          "color": "rgba(14, 165, 233, 1)"
+        },
+        {
+          "x": 10,
+          "y": 8,
+          "color": "rgba(14, 165, 233, 0.75)"
+        },
+        {
+          "x": 11,
+          "y": 8,
+          "color": "rgba(101, 163, 13, 0.75)"
+        },
+        {
+          "x": 12,
+          "y": 8,
+          "color": "rgba(101, 163, 13, 1)"
+        },
+        {
+          "x": 13,
+          "y": 8,
+          "color": "rgba(130, 152, 12, 0.875)"
+        },
+        {
+          "x": 14,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 15,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 16,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.75)"
+        },
+        {
+          "x": 17,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 18,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 19,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 20,
+          "y": 8,
+          "color": "rgba(217, 119, 6, 0.5)"
+        },
+        {
+          "x": 8,
+          "y": 9,
+          "color": "rgba(14, 165, 233, 0.5)"
+        },
+        {
+          "x": 9,
+          "y": 9,
+          "color": "rgba(14, 165, 233, 0.5)"
+        },
+        {
+          "x": 10,
+          "y": 9,
+          "color": "rgba(14, 165, 233, 0.5)"
+        },
+        {
+          "x": 11,
+          "y": 9,
+          "color": "rgba(101, 163, 13, 0.75)"
+        },
+        {
+          "x": 12,
+          "y": 9,
+          "color": "rgba(101, 163, 13, 0.75)"
+        },
+        {
+          "x": 13,
+          "y": 9,
+          "color": "rgba(101, 163, 13, 0.75)"
+        },
+        {
+          "x": 19,
+          "y": 9,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 20,
+          "y": 9,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 21,
+          "y": 9,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 19,
+          "y": 10,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 20,
+          "y": 10,
+          "color": "rgba(101, 163, 13, 1)"
+        },
+        {
+          "x": 21,
+          "y": 10,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 19,
+          "y": 11,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 20,
+          "y": 11,
+          "color": "rgba(101, 163, 13, 0.5)"
+        },
+        {
+          "x": 21,
+          "y": 11,
+          "color": "rgba(101, 163, 13, 0.5)"
+        }
+      ]
+    },
+    "identity": {
+      "name": "Agent Owner's Verify Agent",
+      "ownerId": "agent-owner@twosmiles.ca",
+      "isAgent": true,
+      "agentLabel": "Verify Agent"
+    },
+    "version": 4,
+    "stepIndex": 7
+  }
+}

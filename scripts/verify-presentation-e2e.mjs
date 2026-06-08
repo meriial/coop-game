@@ -306,20 +306,20 @@ async function main() {
     console.log('\nGame: pixel-heart');
     // Player already joined during periodic-match; no need to GAME_JOIN again.
 
-    const VALID_X = 3;
-    const VALID_Y = 2;
+    const CX = 5;
+    const CY = 5;
     let progressBefore = 0;
-    participant.send({ type: 'GAME_PAINT', x: VALID_X, y: VALID_Y });
+    participant.send({ type: 'GAME_PAINT', x: CX, y: CY });
 
     const painted = await participant.waitFor(
       (m) => m.type === 'SYNC_CANVAS' && (m.progress ?? 0) > progressBefore,
     );
-    if (!painted.canvas?.[VALID_Y]?.[VALID_X]) throw new Error('cell not painted');
-    ok('GAME_PAINT on target cell (progress advances)');
+    if (!painted.canvas?.[CY]?.[CX]) throw new Error('cell not painted');
+    ok('GAME_PAINT fills a cell (coverage advances)');
 
-    participant.send({ type: 'GAME_PAINT', x: 0, y: 0 });
+    participant.send({ type: 'GAME_PAINT', x: 999, y: 999 });
     await sleep(300);
-    ok('Off-target GAME_PAINT rejected (no error, no spurious state)');
+    ok('Out-of-bounds GAME_PAINT rejected (no error, no spurious state)');
 
     presenter.send({ type: 'GAME_RESET' });
     const cleared = await participant.waitFor((m) => m.type === 'SYNC_CANVAS' && m.progress === 0);

@@ -1,6 +1,6 @@
 # Workshop Pixel Art
 
-An interactive presentation platform for AI workshops. The presenter drives a slide deck with live polls; participants play real-time games together (periodic-table matching and cooperative pixel-heart painting). AI agents can join via an MCP bridge.
+An interactive presentation platform for AI workshops. The presenter drives a slide deck with live polls; participants play real-time games together (periodic-table matching and a cooperative paint canvas with color mixing and power-ups). AI agents can join via an MCP bridge.
 
 **Docs:** [architecture](docs/architecture.md) · [games](docs/game.md) · **[local verification](docs/verification.md)**
 
@@ -33,7 +33,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/meriial/coop-game/main/setup
 You'll be prompted for an email if you omit it. The email must be on a domain listed in the worker's `ALLOWED_EMAIL_DOMAINS` secret.
 
 **What you see depends on who you are:**
-- **Participants** — slides sync in real-time, vote in polls, paint the pixel heart
+- **Participants** — slides sync in real-time, vote in polls, paint together on the shared canvas
 - **Organizer** (email set via `ADMIN_EMAIL`) — same view, plus a presenter control bar to advance slides, trigger polls, reset the canvas, and invite guests
 
 **Requirements:** Node.js 18+, git, curl &nbsp;·&nbsp; pnpm is installed automatically if missing
@@ -62,14 +62,17 @@ cd server && npm test                    # 25 automated WebSocket tests (no serv
 
 ## MCP agents
 
-Build and run the stdio MCP server so an LLM agent can play as `"Owner's Agent 1"`:
+The workshop exposes a stdio MCP server (`packages/mcp-server`) with tools like `get_config`, `get_state`, `paint`, and `paint_path`.
+
+**Recommended for dev/demos:** [Poor man's MCP](./docs/architecture.md#poor-mans-mcp-scripted-client) — spawn the server from a Node script and call tools via `@modelcontextprotocol/sdk`, no Cursor MCP config required:
 
 ```bash
 cd packages/mcp-server && npm run build
-WORKSHOP_OWNER_TOKEN=<jwt> WORKSHOP_AGENT_LABEL="Agent 1" node dist/index.js
+npm run verify:canvas          # smoke-test all canvas tools
+node scripts/draw-circle.mjs   # agent-style circle demo
 ```
 
-Tools: `get_state`, `wait_for_update`, `take_action`. Details in [docs/architecture.md § MCP bridge](docs/architecture.md#mcp-bridge).
+Details, env vars, and the full script list: [docs/architecture.md § MCP bridge](docs/architecture.md#mcp-bridge).
 
 ## SDK reference
 

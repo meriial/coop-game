@@ -34,11 +34,11 @@ Browser (frontend Vite app)
 │                                             │
 │  Delegates game logic via GameRegistry:     │
 │    periodic-match  (MATCH_*)                │
-│    pixel-heart     (GAME_PAINT, GAME_RESET) │
+│    pixel-heart     (GAME_PAINT*, GAME_CONFIG)│
 │                                             │
 │  SQLite (DO storage):                       │
-│    meta, votes, players, canvas_cells,      │
-│    match_board, match_claimed, …            │
+│    meta, votes, players, paint_cells,       │
+│    paint_powerups, match_board, …           │
 └─────────────────────────────────────────────┘
 ```
 
@@ -52,7 +52,7 @@ Browser (frontend Vite app)
 | `packages/protocol` | `@workshop/protocol` — shared wire types (single source of truth). |
 | `packages/game-core` | `@workshop/game-core` — `GameEngine` contract + server/client registries. |
 | `packages/games/periodic-match` | Element-matching game (engine + React client). |
-| `packages/games/pixel-heart` | Cooperative heart canvas (engine + React client). |
+| `packages/games/pixel-heart` | Cooperative paint canvas with color mixing + power-ups (engine + React client). |
 | `packages/mcp-server` | `@workshop/mcp` — stdio MCP bridge for LLM agents. |
 | `examples/starter/` | Minimal starter app using the legacy `/ws` protocol. |
 
@@ -105,8 +105,10 @@ All messages are JSON. Types are defined in `@workshop/protocol`.
 | `SUBMIT_VOTE` | anyone | Poll vote or slider value |
 | `RESET_POLL` | presenter | Clear poll results |
 | `GAME_JOIN` | anyone | Register player name + color |
-| `GAME_PAINT` | joined player | Paint pixel-heart target cell |
-| `GAME_RESET` | presenter | Clear pixel-heart canvas |
+| `GAME_PAINT` | joined player | Paint a canvas cell (blends neighbours) |
+| `GAME_PAINT_PATH` | joined player | Batch-paint up to `agentBatchMax` cells |
+| `GAME_CONFIG` | presenter | Configure grid size, mixing, cooldown, power-ups |
+| `GAME_RESET` | presenter | Clear the co-op canvas |
 | `MATCH_FLIP` | joined player | Flip periodic-match tile |
 | `MATCH_PAUSE` | presenter | Toggle match pause |
 | `MATCH_RESET` | presenter | Reshuffle match board |
@@ -119,7 +121,7 @@ All messages are JSON. Types are defined in `@workshop/protocol`.
 | `WELCOME` | Initial snapshot (step, polls, both game states) |
 | `SYNC_STEP` | Step index changed |
 | `SYNC_MATCH` | Periodic-match state |
-| `SYNC_CANVAS` | Pixel-heart state |
+| `SYNC_CANVAS` | Co-op canvas state (cells, config, power-ups, effects) |
 | `POLL_UPDATES` / `POLL_RESET` | Poll aggregates |
 | `CONNECTED_USERS` | Who is in the room |
 
@@ -175,24 +177,93 @@ The original `GameClient` in `sdk/src/client.ts` still targets `GameRoom` at `/w
 
 ## MCP bridge
 
-`@workshop/mcp` is a local stdio MCP server for LLM agents:
+`@workshop/mcp` is a local **stdio MCP server** that exposes workshop tools to LLM agents. The server itself is small; most agent work happens over WebSocket to `PresentationRoom` (same path as the browser).
+
+### Tools
 
 | Tool | Purpose |
 |---|---|
-| `get_state` | Active game id + state snapshot + agent identity |
+| `get_state` | Active game id + state snapshot + agent identity (compact, agent-aware view for the co-op canvas) |
+| `get_config` | Co-op canvas rules: grid, mix strength, cooldown, batch size, power-up kinds |
+| `paint` / `paint_path` | Paint one cell, or a batch of up to `agentBatchMax` cells |
 | `wait_for_update` | Long-poll until next `SYNC_*` (or ~25s timeout) |
-| `take_action` | Send an inbound message (e.g. `MATCH_FLIP`, `GAME_PAINT`) |
+| `take_action` | Send an arbitrary inbound message (e.g. `MATCH_FLIP`, `GAME_PAINT`) |
 
-```bash
-cd packages/mcp-server && npm run build
+Build once (`npm run build` in `packages/mcp-server`) — esbuild bundles `@workshop/sdk` into `dist/index.js` so plain `node` works.
 
-WORKSHOP_OWNER_TOKEN=<jwt> \
-WORKSHOP_AGENT_LABEL="Agent 1" \
-WORKSHOP_ROOM_URL=http://localhost:8787 \
-node dist/index.js
+MCP cannot push to the LLM mid-turn; the bridge→agent leg is pull-based via `wait_for_update`.
+
+### Poor man's MCP (scripted client)
+
+You do **not** need to register the server in Cursor, Claude Desktop, or any MCP host config to exercise agents. The approach used in this repo's verification scripts and agent demos:
+
+1. **Spawn** `node packages/mcp-server/dist/index.js` as a stdio subprocess.
+2. **Connect** with `@modelcontextprotocol/sdk`'s `Client` + `StdioClientTransport`.
+3. **Call tools** (`get_config`, `get_state`, `paint_path`, …) from any Node script, shell loop, or CI job.
+
+The MCP server is just a thin adapter between MCP tool calls and the room WebSocket — your script plays the role of the "LLM", supplying the plan (geometry, loops, batching).
+
+**Minimal pattern** (from `packages/mcp-server/scripts/verify-canvas.mjs`):
+
+```javascript
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+
+const transport = new StdioClientTransport({
+  command: 'node',
+  args: ['packages/mcp-server/dist/index.js'],
+  env: {
+    WORKSHOP_OWNER_TOKEN: '<jwt>',
+    WORKSHOP_ROOM_URL: 'http://localhost:8787',
+    WORKSHOP_ROOM_ID: 'main',
+    WORKSHOP_AGENT_LABEL: 'Agent 1',
+  },
+});
+
+const client = new Client({ name: 'my-script', version: '0.0.1' });
+await client.connect(transport);
+
+const result = await client.callTool({ name: 'get_config', arguments: {} });
+const text = result.content.find((c) => c.type === 'text').text;
+console.log(JSON.parse(text));
+
+await client.callTool({
+  name: 'paint_path',
+  arguments: { cells: [{ x: 10, y: 8 }, { x: 11, y: 8 }] },
+});
+
+await client.close();
 ```
 
-MCP cannot push to the LLM mid-turn; real-time events arrive on the DO→bridge WebSocket leg, and the bridge→agent leg is pull-based via `wait_for_update`.
+**Why bother?** Same wire protocol and tools a hosted MCP client would use, but zero editor setup — useful for smoke tests, scripted demos, subagents running shell commands, and prototyping agent logic before wiring Cursor.
+
+**Ready-made scripts** (all in `packages/mcp-server/scripts/`, run from that directory after `npm run build`):
+
+| Script | What it does |
+|---|---|
+| `verify-canvas.mjs` | Smoke-test all canvas MCP tools against a live room |
+| `prep-canvas.mjs` | Presenter JWT: advance to step 7, reset canvas, set grid/cooldown |
+| `creative-draw.mjs` | One agent, one pattern (`--pattern spiral\|wave\|diamond`) via batched `paint_path` |
+| `draw-circle.mjs` | Agent-style demo: `get_config` → plan circle outline → `paint_path` batches |
+
+```bash
+# Prerequisites: Worker on :8787, room on co-op canvas step (or run prep-canvas.mjs first)
+cd packages/mcp-server && npm run build
+
+npm run verify:canvas
+
+node scripts/prep-canvas.mjs
+node scripts/draw-circle.mjs
+node scripts/creative-draw.mjs --pattern wave --owner wave-bot@example.com --name "Wave Bot" --label "Wave Agent"
+```
+
+JWT for scripts: any valid participant token (e.g. from `frontend/.env` after `./setup.sh`), or sign one locally with `JWT_SECRET` from `server/.dev.vars` (see `prep-canvas.mjs`). Each distinct `--owner` email gets its own player color.
+
+Subagents in Cursor can run these scripts via shell — that is how spiral/wave/diamond/circle demos were driven, not via Cursor's MCP settings panel.
+
+### Hosted MCP (optional)
+
+To attach an LLM inside Cursor or Claude Desktop instead, register the same stdio command in that tool's MCP config, passing the env vars above. Functionally identical to poor man's MCP; only the caller changes (chat model vs your script).
 
 ## Testing
 

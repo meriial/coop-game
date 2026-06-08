@@ -22,13 +22,85 @@ export interface MatchState {
   matchPaused: boolean;
   matchScores: MatchScore[];
   matchElementCount: number;
+  matchPendingTimeoutMs: number;
   gameOver: boolean;
 }
 
+/** Power-up effects double as blend modes that change how the next few paints behave. */
+export type PowerUpKind = 'bloom' | 'prism' | 'supernova' | 'additive';
+
+export interface PowerUp {
+  id: string;
+  x: number;
+  y: number;
+  kind: PowerUpKind;
+}
+
+export interface PlayerEffect {
+  kind: PowerUpKind;
+  /** Remaining paints this effect applies to. */
+  charges: number;
+}
+
+export interface PaintConfig {
+  cols: number;
+  rows: number;
+  /** 0..1 blend weight applied to the 8 neighbours of a painted cell. */
+  mixStrength: number;
+  /** Minimum ms between paints, applied to humans and agents alike. */
+  cooldownMs: number;
+  /** Max cells an agent may paint in a single GAME_PAINT_PATH batch. */
+  agentBatchMax: number;
+  powerupsEnabled: boolean;
+  powerupIntervalMs: number;
+  powerupMax: number;
+}
+
+export const DEFAULT_PAINT_CONFIG: PaintConfig = {
+  cols: 32,
+  rows: 18,
+  mixStrength: 0.5,
+  cooldownMs: 150,
+  agentBatchMax: 8,
+  powerupsEnabled: true,
+  powerupIntervalMs: 12_000,
+  powerupMax: 3,
+};
+
 export interface CanvasState {
+  /** rows × cols matrix of composited CSS colors (e.g. "rgba(...)") or null. */
   canvas: (string | null)[][];
+  cols: number;
+  rows: number;
+  /** Coverage: painted cells / total cells, 0..100. */
   progress: number;
+  /** Harmony: cells blended by 2+ distinct painters / painted cells, 0..100. */
+  harmony: number;
   players: Record<string, Pick<Player, 'id' | 'name' | 'color'>>;
+  powerups: PowerUp[];
+  /** Per-player active blend-mode effect, keyed by player id. */
+  effects: Record<string, PlayerEffect>;
+  /** Player ids that have claimed a power-up in the current rotation cycle. */
+  claims: string[];
+  config: PaintConfig;
+}
+
+export function emptyCanvasState(
+  cols: number = DEFAULT_PAINT_CONFIG.cols,
+  rows: number = DEFAULT_PAINT_CONFIG.rows,
+): CanvasState {
+  return {
+    canvas: Array.from({ length: rows }, () => Array<string | null>(cols).fill(null)),
+    cols,
+    rows,
+    progress: 0,
+    harmony: 0,
+    players: {},
+    powerups: [],
+    effects: {},
+    claims: [],
+    config: { ...DEFAULT_PAINT_CONFIG, cols, rows },
+  };
 }
 
 export interface ConnectedUser {
@@ -42,11 +114,14 @@ export type InboundMsg =
   | { type: 'RESET_POLL'; pollId: string }
   | { type: 'GAME_JOIN'; name: string }
   | { type: 'GAME_PAINT'; x: number; y: number }
+  | { type: 'GAME_PAINT_PATH'; cells: { x: number; y: number }[] }
+  | { type: 'GAME_CONFIG'; config: Partial<PaintConfig> }
   | { type: 'GAME_RESET' }
   | { type: 'MATCH_FLIP'; pos: number }
   | { type: 'MATCH_PAUSE' }
   | { type: 'MATCH_RESET' }
-  | { type: 'MATCH_SET_SIZE'; count: number };
+  | { type: 'MATCH_SET_SIZE'; count: number }
+  | { type: 'MATCH_SET_TIMEOUT'; seconds: number };
 
 export type OutboundMsg =
   | ({ type: 'WELCOME'; stepIndex: number; role: string; pollResults: Record<string, Record<string, number>>; pollValues: Record<string, string[]> } & CanvasState & MatchState)

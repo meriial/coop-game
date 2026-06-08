@@ -1,4 +1,4 @@
-import type { CanvasState, InboundMsg, MatchState, OutboundMsg } from '@workshop/protocol';
+import { emptyCanvasState, type CanvasState, type InboundMsg, type MatchState, type OutboundMsg } from '@workshop/protocol';
 
 export interface AgentIdentity {
   name: string;
@@ -49,13 +49,10 @@ export class PresentationClient {
     matchPaused: false,
     matchScores: [],
     matchElementCount: 118,
+    matchPendingTimeoutMs: 5000,
     gameOver: false,
   };
-  private pixelHeart: CanvasState = {
-    canvas: Array.from({ length: 20 }, () => Array<string | null>(20).fill(null)),
-    progress: 0,
-    players: {},
-  };
+  private pixelHeart: CanvasState = emptyCanvasState();
   private identity: AgentIdentity = { name: 'Guest', ownerId: '', isAgent: false };
   private listeners: SyncListener[] = [];
   private waiters: Array<{ minVersion: number; resolve: (s: PresentationSnapshot) => void; timer: ReturnType<typeof setTimeout> }> = [];
@@ -180,13 +177,10 @@ export class PresentationClient {
           matchPaused: msg.matchPaused,
           matchScores: msg.matchScores,
           matchElementCount: msg.matchElementCount,
+          matchPendingTimeoutMs: msg.matchPendingTimeoutMs,
           gameOver: msg.gameOver,
         };
-        this.pixelHeart = {
-          canvas: msg.canvas,
-          progress: msg.progress,
-          players: msg.players,
-        };
+        this.pixelHeart = extractCanvasState(msg);
         this.bump();
         break;
       case 'SYNC_STEP':
@@ -202,22 +196,35 @@ export class PresentationClient {
           matchPaused: msg.matchPaused,
           matchScores: msg.matchScores,
           matchElementCount: msg.matchElementCount,
+          matchPendingTimeoutMs: msg.matchPendingTimeoutMs,
           gameOver: msg.gameOver,
         };
         this.bump();
         break;
       case 'SYNC_CANVAS':
-        this.pixelHeart = {
-          canvas: msg.canvas,
-          progress: msg.progress,
-          players: msg.players,
-        };
+        this.pixelHeart = extractCanvasState(msg);
         this.bump();
         break;
       default:
         break;
     }
   }
+}
+
+function extractCanvasState(msg: OutboundMsg & Partial<CanvasState>): CanvasState {
+  const base = emptyCanvasState();
+  return {
+    canvas: msg.canvas ?? base.canvas,
+    cols: msg.cols ?? base.cols,
+    rows: msg.rows ?? base.rows,
+    progress: msg.progress ?? 0,
+    harmony: msg.harmony ?? 0,
+    players: msg.players ?? {},
+    powerups: msg.powerups ?? [],
+    effects: msg.effects ?? {},
+    claims: msg.claims ?? [],
+    config: msg.config ?? base.config,
+  };
 }
 
 export function buildRoomWsUrl(baseUrl: string, roomId: string, token: string, agentLabel?: string): string {

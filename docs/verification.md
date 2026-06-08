@@ -265,7 +265,7 @@ With Worker + frontend running and a JWT in hand:
 | 1 | Open `http://localhost:5174/?token=<jwt>` | Slide deck loads; WebSocket connects |
 | 2 | Default step (index 0) | **periodic-match** game visible |
 | 3 | Presenter: advance slides (←/→ or control bar) | All tabs sync via `SYNC_STEP` |
-| 4 | Advance to pixel-heart step (index 7) | Heart canvas; click target cells to paint |
+| 4 | Advance to pixel-heart step (index 7) | Co-op canvas; click cells to paint (colors blend; power-ups appear) |
 | 5 | Poll steps | Vote; results update live |
 | 6 | Two tabs (dev toggle or two JWTs) | Moves in one tab appear in the other |
 
@@ -287,27 +287,52 @@ ws://localhost:8787/room/main?token=<jwt>&devRole=presenter
 
 ## 7. MCP agent verification
 
-Requires a running Worker (section 2 or 3) and an owner JWT (section 4).
+Requires a running Worker (section 2 or 3) and a JWT (section 4).
+
+### Poor man's MCP (scripted client)
+
+No MCP host config (Cursor, Claude Desktop, etc.) is required. Build the server, then drive it from Node scripts that spawn `dist/index.js` on stdio and call tools via `@modelcontextprotocol/sdk`:
 
 ```bash
-# Build MCP server
 cd packages/mcp-server
 npm install && npm run build
 
-# Run (stdio — typically registered in an MCP client config)
+# Room must be on co-op canvas (step 7) — or run prep first:
+node scripts/prep-canvas.mjs
+
+# Smoke-test all canvas tools
+npm run verify:canvas
+
+# Agent demos (batched paint_path)
+node scripts/draw-circle.mjs
+node scripts/creative-draw.mjs --pattern spiral --owner bot@example.com --name "Spiral Bot" --label "Spiral Agent"
+```
+
+Scripts live in `packages/mcp-server/scripts/`. JWT: use section 4 token, `frontend/.env` `VITE_AGENT_TOKEN`, or sign locally with `JWT_SECRET` from `server/.dev.vars` (see `prep-canvas.mjs`).
+
+Full pattern and tool reference: [architecture.md § Poor man's MCP](./architecture.md#poor-mans-mcp-scripted-client).
+
+### Hosted MCP (optional)
+
+To attach an LLM inside an editor instead of a script:
+
+```bash
+cd packages/mcp-server && npm run build
 export WORKSHOP_OWNER_TOKEN='<jwt from section 4>'
 export WORKSHOP_AGENT_LABEL='Agent 1'
 export WORKSHOP_ROOM_URL='http://localhost:8787'
 export WORKSHOP_ROOM_ID='main'
-node dist/index.js
+node dist/index.js   # stdio — register this command in your MCP host config
 ```
 
-**Tool smoke test** (via MCP client or integration test):
+**Tool smoke test** (scripted or hosted):
 
 | Tool | Expected |
 |---|---|
-| `get_state` | JSON with `activeGameId`, game state, `identity.name` = `"<Owner>'s Agent 1"` |
-| `take_action` | Send e.g. `{ "type": "MATCH_FLIP", "payload": { "pos": 0 } }` on periodic-match step; state updates in browser |
+| `get_config` | Grid size, cooldown, `agentBatchMax`, power-up rules |
+| `get_state` | JSON with `activeGameId`, compact canvas state, `identity.name` = `"<Owner>'s Agent 1"` |
+| `paint_path` | Batch paint on co-op canvas; coverage increases |
+| `take_action` | Send e.g. `{ "type": "MATCH_FLIP", "pos": 0 }` on periodic-match step |
 | `wait_for_update` | Returns after another player moves or times out ~25s when idle |
 
 **Agent cap test** (periodic-match, step 0): connect a second agent with the same owner token + different `agentLabel` → WebSocket upgrade returns **403**.
@@ -393,7 +418,8 @@ From repo root: `npm run login:dev` runs the dry-run flow against `http://localh
 | Auth config (domains + repo) | `curl http://localhost:8787/auth/config \| jq` |
 | Participant setup | `./setup.sh http://localhost:8787 you@your-allowed-domain.example` |
 | Presenter UI | `http://localhost:5174/?token=<jwt>` |
-| MCP server | `WORKSHOP_OWNER_TOKEN=<jwt> node packages/mcp-server/dist/index.js` |
+| MCP smoke test (scripted) | `cd packages/mcp-server && npm run verify:canvas` |
+| MCP agent demo | `node packages/mcp-server/scripts/draw-circle.mjs` |
 
 ## Troubleshooting
 
