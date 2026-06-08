@@ -41,12 +41,74 @@ function myPlayerKey(snapshot: PresentationSnapshot): string {
   return snapshot.identity.ownerId || snapshot.identity.name;
 }
 
+// Renders the canvas as a text grid the agent can reason about spatially.
+// Each cell is 2 chars wide:  ·· = empty  ██ = this agent  AA BB … = others
+// Column indices are shown every 5 columns; row indices on the left.
+function renderAsciiCanvas(
+  canvas: (string | null | undefined)[][],
+  myColor: string | null,
+  cols: number,
+  rows: number,
+  powerups: { x: number; y: number; kind: string }[],
+): string {
+  const puAt = new Map<string, string>();
+  for (const p of powerups) puAt.set(`${p.x},${p.y}`, p.kind[0].toUpperCase());
+
+  // Assign a two-letter label to each foreign color in encounter order.
+  const palette = new Map<string, string>();
+  const LABELS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const c = canvas[y]?.[x];
+      if (c && c !== myColor && !palette.has(c)) {
+        const ltr = LABELS[palette.size % LABELS.length];
+        palette.set(c, ltr + ltr);
+      }
+    }
+  }
+
+  const lines: string[] = [];
+
+  // Column header every 5 cols.
+  let header = '    ';
+  for (let x = 0; x < cols; x++) {
+    header += x % 5 === 0 ? String(x).padStart(2) : '  ';
+  }
+  lines.push(header);
+
+  for (let y = 0; y < rows; y++) {
+    let row = String(y).padStart(2) + ' ';
+    for (let x = 0; x < cols; x++) {
+      const c = canvas[y]?.[x];
+      if (!c) {
+        const pu = puAt.get(`${x},${y}`);
+        row += pu ? `[${pu}` : '··';
+      } else if (c === myColor) {
+        row += '██';
+      } else {
+        row += palette.get(c) ?? '??';
+      }
+    }
+    lines.push(row);
+  }
+
+  // Legend.
+  lines.push('');
+  lines.push(`·· = empty  ██ = you (${myColor ?? 'unassigned'})`);
+  palette.forEach((sym, color) => lines.push(`${sym} = ${color}`));
+  const puKinds = [...new Set(powerups.map(p => p.kind))];
+  if (puKinds.length) lines.push(`[X = power-up on floor (${puKinds.join(', ')})`);
+
+  return lines.join('\n');
+}
+
 // Compact, agent-friendly view of the co-op canvas: only painted cells (the
 // full matrix is mostly empty), plus power-ups, this agent's color/effect, and
 // whether the agent is currently eligible to grab a power-up.
 function pixelHeartView(snapshot: PresentationSnapshot) {
   const s = snapshot.pixelHeart;
   const myKey = myPlayerKey(snapshot);
+  const myColor = s.players[myKey]?.color ?? null;
   const paintedCells: { x: number; y: number; color: string }[] = [];
   for (let y = 0; y < s.canvas.length; y++) {
     const row = s.canvas[y];
@@ -62,13 +124,14 @@ function pixelHeartView(snapshot: PresentationSnapshot) {
     coverage: s.progress,
     harmony: s.harmony,
     config: s.config,
-    myColor: s.players[myKey]?.color ?? null,
+    myColor,
     myEffect: s.effects[myKey] ?? null,
     powerupEligible: !s.claims.includes(myKey),
     powerups: s.powerups,
     players: Object.values(s.players),
     paintedCount: paintedCells.length,
     paintedCells,
+    asciiCanvas: renderAsciiCanvas(s.canvas, myColor, s.cols, s.rows, s.powerups),
   };
 }
 
