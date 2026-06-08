@@ -173,13 +173,15 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
         })}
       </div>
 
-      {state.paintsUntilNextPowerup !== null && (
+      {config.powerupsEnabled && config.powerupMax > 0 && state.powerups.length >= config.powerupMax ? (
+        <p className="text-amber-500/80 text-xs text-center">Power-up slots full</p>
+      ) : state.paintsUntilNextPowerup !== null ? (
         <p className="text-slate-500 text-xs text-center">
           Next power-up in{' '}
           <span className="text-amber-400 font-semibold">{state.paintsUntilNextPowerup}</span>{' '}
           paint{state.paintsUntilNextPowerup !== 1 ? 's' : ''}
         </p>
-      )}
+      ) : null}
 
       {/* Admin drawer — presenter only */}
       {isHost && (
@@ -280,6 +282,11 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
                         </span>
                       </label>
                     )}
+                    <label className="flex flex-col gap-1">
+                      <span>Max on board: {config.powerupMax}</span>
+                      <input type="range" min={1} max={10} value={config.powerupMax}
+                        onChange={(e) => setConfig({ powerupMax: Number(e.target.value) })} />
+                    </label>
                     <button
                       onClick={handleDropPowerup}
                       className="w-full py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-medium transition-colors"

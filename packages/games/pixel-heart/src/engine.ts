@@ -195,14 +195,14 @@ function consumeEffectCharge(ctx: GameContext, playerKey: string, charges: numbe
   }
 }
 
-function tryPickupPowerup(ctx: GameContext, player: Player, x: number, y: number): void {
+function tryPickupPowerup(ctx: GameContext, player: Player, x: number, y: number): boolean {
   const puRows = [...ctx.sql.exec(`SELECT id, kind FROM paint_powerups WHERE x = ? AND y = ?`, x, y)];
-  if (puRows.length === 0) return;
+  if (puRows.length === 0) return false;
 
   // Fairness rotation: a player who already claimed this cycle is ineligible;
   // the power-up stays on the board until everyone else has had a turn.
   const claimed = [...ctx.sql.exec(`SELECT 1 FROM paint_powerup_claims WHERE player_key = ?`, player.id)];
-  if (claimed.length > 0) return;
+  if (claimed.length > 0) return false;
 
   const kind = puRows[0].kind as PowerUpKind;
   ctx.sql.exec(`DELETE FROM paint_powerups WHERE id = ?`, puRows[0].id as string);
@@ -220,6 +220,7 @@ function tryPickupPowerup(ctx: GameContext, player: Player, x: number, y: number
   if (claimCount >= Math.max(1, playerCount)) {
     ctx.sql.exec(`DELETE FROM paint_powerup_claims`);
   }
+  return true;
 }
 
 function spawnPowerup(ctx: GameContext, cfg: PaintConfig, now: number): boolean {
@@ -308,11 +309,24 @@ function applyPaint(ctx: GameContext, player: Player, x: number, y: number, cfg:
     player.id, x, y,
   );
 
-  tryPickupPowerup(ctx, player, x, y);
+  const consumed = tryPickupPowerup(ctx, player, x, y);
 
-  // Increment paint count (used by count-mode power-up spawning).
-  const paintsSince = Number(ctx.meta.get('paint_count_since_spawn') ?? 0);
-  ctx.meta.set('paint_count_since_spawn', String(paintsSince + 1));
+  // Manage spawn clocks: freeze when at max capacity; restart on pickup.
+  const active = [...ctx.sql.exec(`SELECT COUNT(*) as c FROM paint_powerups`)][0].c as number;
+  if (active >= cfg.powerupMax) {
+    // Slots full — keep the time-mode clock frozen so no interval accumulates.
+    if (cfg.powerupMode === 'time') ctx.meta.set('paint_last_spawn_ms', String(now));
+    // Count mode: simply don't increment.
+  } else {
+    if (consumed) {
+      // A slot just opened — restart both clocks so the next drop is a
+      // full interval/count away rather than firing immediately.
+      ctx.meta.set('paint_count_since_spawn', '0');
+      ctx.meta.set('paint_last_spawn_ms', String(now));
+    }
+    const paintsSince = Number(ctx.meta.get('paint_count_since_spawn') ?? 0);
+    ctx.meta.set('paint_count_since_spawn', String(paintsSince + 1));
+  }
 
   maybeSpawnPowerup(ctx, cfg, now);
   return true;
@@ -389,13 +403,16 @@ function buildCanvasState(ctx: GameContext): CanvasState {
     wormLastPaints[row.player_key as string] = { x: row.x as number, y: row.y as number };
   }
 
-  // Paints-until-next-powerup counter (count mode only).
+  // Paints-until-next-powerup counter (count mode, not at max capacity).
   let paintsUntilNextPowerup: number | null = null;
   if (cfg.powerupsEnabled && cfg.powerupMode === 'count') {
-    const playerCount = ctx.players().length;
-    const needed = Math.max(1, playerCount) * cfg.powerupPaintsPerPlayer;
-    const paintsSince = Number(ctx.meta.get('paint_count_since_spawn') ?? 0);
-    paintsUntilNextPowerup = Math.max(0, needed - paintsSince);
+    const activeCount = [...ctx.sql.exec(`SELECT COUNT(*) as c FROM paint_powerups`)][0].c as number;
+    if (activeCount < cfg.powerupMax) {
+      const playerCount = ctx.players().length;
+      const needed = Math.max(1, playerCount) * cfg.powerupPaintsPerPlayer;
+      const paintsSince = Number(ctx.meta.get('paint_count_since_spawn') ?? 0);
+      paintsUntilNextPowerup = Math.max(0, needed - paintsSince);
+    }
   }
 
   return {
