@@ -114,11 +114,10 @@ export function PresenterApp({ state, send, myName, myOwner, token, onToggleDevR
   return (
     <div className="w-screen h-screen bg-slate-950 overflow-hidden relative flex flex-col">
       {/* Main stage */}
-      <div className="flex-1 overflow-hidden relative isolate">
+      <div className="flex-1 overflow-hidden relative isolate flex flex-col">
         <SlideBackground config={state.bgConfig} />
-        <StageRenderer wsState={state} send={send} isPresenter myName={myName} myOwner={myOwner} myVotes={myVotes} setMyVote={setMyVote} />
-        {/* Name badge + optional sound toggle */}
-        <div className="absolute top-3 right-4 flex items-center gap-2 z-50">
+        {/* Top chrome strip — transparent, reserves vertical space so stage content never collides with the user pill. */}
+        <div className="relative z-50 flex items-center justify-end gap-2 h-11 px-4 shrink-0">
           {stepHasSound(step) && (
             <button
               onClick={toggleMute}
@@ -138,6 +137,9 @@ export function PresenterApp({ state, send, myName, myOwner, token, onToggleDevR
             </button>
           )}
           <UserSwitcher myName={myName} currentEmail={myOwner} />
+        </div>
+        <div className="relative flex-1 min-h-0">
+          <StageRenderer wsState={state} send={send} isPresenter myName={myName} myOwner={myOwner} myVotes={myVotes} setMyVote={setMyVote} />
         </div>
       </div>
 
