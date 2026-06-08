@@ -38,63 +38,6 @@ function useBoardSize(cols: number, rows: number) {
   return { wrapRef, cell };
 }
 
-function canvasToDataURL(canvasData: (string | null)[][], cols: number, rows: number): string {
-  const offscreen = document.createElement('canvas');
-  const scale = 4;
-  offscreen.width = cols * scale;
-  offscreen.height = rows * scale;
-  const ctx2d = offscreen.getContext('2d')!;
-  ctx2d.fillStyle = '#0b1220';
-  ctx2d.fillRect(0, 0, offscreen.width, offscreen.height);
-  for (let y = 0; y < rows; y++) {
-    for (let x = 0; x < cols; x++) {
-      const color = canvasData[y]?.[x];
-      if (color) {
-        ctx2d.fillStyle = color;
-        ctx2d.fillRect(x * scale, y * scale, scale, scale);
-      }
-    }
-  }
-  return offscreen.toDataURL('image/png');
-}
-
-async function judgeWithAI(
-  apiKey: string,
-  prompt: string,
-  canvasData: (string | null)[][],
-  cols: number,
-  rows: number,
-): Promise<{ score: number; commentary: string }> {
-  const dataUrl = canvasToDataURL(canvasData, cols, rows);
-  const base64 = dataUrl.split(',')[1] ?? '';
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 120,
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'image', source: { type: 'base64', media_type: 'image/png', data: base64 } },
-          {
-            type: 'text',
-            text: `This is a collaborative pixel art painting. The prompt was: "${prompt}". Rate how well the painting represents the prompt on a scale of 1–10 (10 = perfect). Reply with JSON only, no explanation outside it: {"score": <number>, "commentary": "<one sentence>"}`,
-          },
-        ],
-      }],
-    }),
-  });
-  if (!res.ok) throw new Error(`API error ${res.status}`);
-  const json = await res.json() as { content: Array<{ text: string }> };
-  return JSON.parse(json.content[0]!.text) as { score: number; commentary: string };
-}
-
 function fmt(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
@@ -109,11 +52,6 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
 
   // Prompt mode state (host)
   const [promptDraft, setPromptDraft] = useState('');
-  const [apiKey, setApiKey] = useState('');
-  const [isJudging, setIsJudging] = useState(false);
-  const [judgeError, setJudgeError] = useState('');
-  const [manualScore, setManualScore] = useState(7);
-  const [manualCommentary, setManualCommentary] = useState('');
 
   // Countdown timer
   const [tickMs, setTickMs] = useState(() => Date.now());
@@ -147,6 +85,7 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
   const me = players.find((p) => p.name === myName);
   const myEffect = me ? state.effects[me.id] : undefined;
   const myLastPaint = me ? state.wormLastPaints[me.id] : undefined;
+  const myCursor = me ? (state.wormCursors[me.id] ?? myLastPaint) : undefined;
 
   // Refs for keyboard handler (avoids stale closure)
   const stateRef = useRef(state);
@@ -171,7 +110,8 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
 
       if (e.key in ARROW_DELTAS) {
         e.preventDefault();
-        const cur = s.wormLastPaints[myPlayer.id];
+        // Arrow keys move the cursor; use wormCursors (falls back to paint anchor if no cursor yet).
+        const cur = s.wormCursors[myPlayer.id] ?? s.wormLastPaints[myPlayer.id];
         if (!cur) return;
         const [dx, dy] = ARROW_DELTAS[e.key]!;
         const nx = Math.max(0, Math.min(s.cols - 1, cur.x + dx));
@@ -182,7 +122,8 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
 
       if (e.key === ' ') {
         e.preventDefault();
-        const cur = s.wormLastPaints[myPlayer.id];
+        // Spacebar paints at cursor; server validates against paint anchor (wormLastPaints).
+        const cur = s.wormCursors[myPlayer.id] ?? s.wormLastPaints[myPlayer.id];
         if (!cur) return;
         send({ type: 'GAME_PAINT', x: cur.x, y: cur.y, opacity: paintOpacityRef.current });
       }
@@ -208,20 +149,6 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
 
   const boardW = cell * cols + GAP * (cols - 1);
   const boardH = cell * rows + GAP * (rows - 1);
-
-  const handleAIJudge = async () => {
-    if (!apiKey || !state.prompt) return;
-    setIsJudging(true);
-    setJudgeError('');
-    try {
-      const result = await judgeWithAI(apiKey, state.prompt, state.canvas, state.cols, state.rows);
-      send({ type: 'GAME_SET_SCORE', score: result.score, commentary: result.commentary });
-    } catch (err) {
-      setJudgeError(err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setIsJudging(false);
-    }
-  };
 
   return (
     <div className="flex flex-col w-full h-full py-2 gap-2">
@@ -275,58 +202,6 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
                 )}
               </div>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* Host judge panel — visible outside drawer when in judging phase */}
-      {isHost && state.phase === 'judging' && (
-        <div className="mx-4 px-4 py-3 rounded-lg border border-amber-500/40 bg-amber-950/30 flex flex-col gap-3">
-          <span className="text-amber-300 text-xs uppercase tracking-wider font-medium">Judge this painting</span>
-          <div className="flex gap-2 flex-wrap items-center">
-            <label className="flex flex-col gap-1 text-xs text-slate-400">
-              Score (1–10)
-              <input
-                type="number" min={1} max={10} value={manualScore}
-                onChange={(e) => setManualScore(Number(e.target.value))}
-                className="w-16 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-slate-200 text-sm"
-              />
-            </label>
-            <label className="flex-1 flex flex-col gap-1 text-xs text-slate-400 min-w-40">
-              Commentary
-              <input
-                type="text" value={manualCommentary} placeholder="One sentence…"
-                onChange={(e) => setManualCommentary(e.target.value)}
-                className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-slate-200 text-sm"
-              />
-            </label>
-            <button
-              onClick={() => send({ type: 'GAME_SET_SCORE', score: manualScore, commentary: manualCommentary })}
-              className="self-end py-1.5 px-3 rounded bg-amber-600 hover:bg-amber-500 text-white text-xs font-medium"
-            >
-              Submit
-            </button>
-          </div>
-          <div className="border-t border-slate-700/50 pt-2 flex flex-col gap-2">
-            <span className="text-slate-500 text-xs">Or judge with AI</span>
-            <div className="flex gap-2 flex-wrap items-end">
-              <label className="flex-1 flex flex-col gap-1 text-xs text-slate-400 min-w-40">
-                Anthropic API key
-                <input
-                  type="password" value={apiKey} placeholder="sk-ant-…"
-                  onChange={(e) => setApiKey(e.target.value)}
-                  className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-slate-200 text-sm font-mono"
-                />
-              </label>
-              <button
-                onClick={handleAIJudge}
-                disabled={isJudging || !apiKey}
-                className="self-end py-1.5 px-3 rounded bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-xs font-medium"
-              >
-                {isJudging ? 'Judging…' : 'Judge with Claude'}
-              </button>
-            </div>
-            {judgeError && <p className="text-red-400 text-xs">{judgeError}</p>}
           </div>
         </div>
       )}
@@ -394,7 +269,12 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
       </div>
 
       {/* Canvas */}
-      <div ref={wrapRef} className="flex-1 min-h-0 w-full flex items-center justify-center">
+      <div ref={wrapRef} className="flex-1 min-h-0 w-full flex items-center justify-center relative">
+        {state.phase === 'judging' && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950/70 rounded">
+            <span className="text-slate-300 text-sm tracking-wide animate-pulse">Judging in progress…</span>
+          </div>
+        )}
         <div
           className="grid bg-slate-950 rounded"
           style={{
@@ -410,11 +290,11 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
               const color = canvas[y]?.[x] ?? null;
               const pu = powerupAt.get(`${x},${y}`);
               const isWormValid = wormValidSet?.has(`${x},${y}`);
-              const isWormCenter = config.wormMode && myLastPaint && myLastPaint.x === x && myLastPaint.y === y;
+              const isWormCenter = config.wormMode && myCursor && myCursor.x === x && myCursor.y === y;
               return (
                 <div
                   key={`${x}-${y}`}
-                  onClick={() => handlePaint(x, y)}
+                  onClick={() => state.phase !== 'judging' && handlePaint(x, y)}
                   className={[
                     'cursor-pointer hover:brightness-150 transition-[filter] duration-75 flex items-center justify-center',
                     pu ? 'ring-1 ring-inset ring-amber-300/60' : '',
@@ -482,6 +362,38 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
           </p>
         )}
       </div>
+
+      {/* Host judging modal */}
+      {isHost && state.phase === 'judging' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 flex flex-col gap-5 w-72 shadow-2xl">
+            <div>
+              <h3 className="text-white font-semibold text-base">Judging phase</h3>
+              <p className="text-slate-400 text-xs mt-1">Give the group more time, or reset for the next prompt.</p>
+            </div>
+            <div className="flex flex-col gap-2">
+              <span className="text-slate-500 text-[10px] uppercase tracking-wider font-medium">Extend time</span>
+              <div className="grid grid-cols-4 gap-1.5">
+                {[1, 2, 3, 5].map((min) => (
+                  <button
+                    key={min}
+                    onClick={() => send({ type: 'GAME_START_ROUND', durationMs: min * 60_000 })}
+                    className="py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-medium transition-colors"
+                  >
+                    +{min}m
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button
+              onClick={() => send({ type: 'GAME_SET_PROMPT', prompt: state.prompt ?? '' })}
+              className="w-full py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm transition-colors"
+            >
+              Reset
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Admin drawer */}
       {isHost && (

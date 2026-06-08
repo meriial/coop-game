@@ -80,6 +80,7 @@ function patchCanvas(msg: Record<string, unknown>): CanvasState {
     claims: (msg.claims as string[]) ?? [],
     config: { ...base.config, ...((msg.config as Partial<CanvasState['config']>) ?? {}) },
     wormLastPaints: (msg.wormLastPaints as CanvasState['wormLastPaints']) ?? {},
+    wormCursors: (msg.wormCursors as CanvasState['wormCursors']) ?? {},
     paintsUntilNextPowerup: (msg.paintsUntilNextPowerup as number | null) ?? null,
     prompt: (msg.prompt as string | null) ?? null,
     phase: (msg.phase as CanvasState['phase']) ?? 'idle',

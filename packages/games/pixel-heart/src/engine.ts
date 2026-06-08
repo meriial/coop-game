@@ -319,9 +319,13 @@ function applyPaint(ctx: GameContext, player: Player, x: number, y: number, cfg:
 
   if (effect) consumeEffectCharge(ctx, player.id, effect.charges);
 
-  // Update worm last-paint position.
+  // Update paint anchor and sync cursor to match.
   ctx.sql.exec(
     `INSERT OR REPLACE INTO paint_worm_last (player_key, x, y) VALUES (?, ?, ?)`,
+    player.id, x, y,
+  );
+  ctx.sql.exec(
+    `INSERT OR REPLACE INTO paint_worm_cursor (player_key, x, y) VALUES (?, ?, ?)`,
     player.id, x, y,
   );
 
@@ -413,10 +417,16 @@ function buildCanvasState(ctx: GameContext): CanvasState {
 
   const claims = [...ctx.sql.exec(`SELECT player_key FROM paint_powerup_claims`)].map((r) => r.player_key as string);
 
-  // Worm last-paint positions (always included; empty when worm mode is off).
+  // Worm paint anchor (determines valid next-paint positions).
   const wormLastPaints: CanvasState['wormLastPaints'] = {};
   for (const row of ctx.sql.exec(`SELECT player_key, x, y FROM paint_worm_last`)) {
     wormLastPaints[row.player_key as string] = { x: row.x as number, y: row.y as number };
+  }
+
+  // Worm keyboard cursor (visual indicator, separate from paint anchor).
+  const wormCursors: CanvasState['wormCursors'] = {};
+  for (const row of ctx.sql.exec(`SELECT player_key, x, y FROM paint_worm_cursor`)) {
+    wormCursors[row.player_key as string] = { x: row.x as number, y: row.y as number };
   }
 
   // Paints-until-next-powerup counter (count mode, not at max capacity).
@@ -447,7 +457,7 @@ function buildCanvasState(ctx: GameContext): CanvasState {
   return {
     canvas, cols: cfg.cols, rows: cfg.rows, progress, harmony,
     players, powerups, effects, claims, config: cfg,
-    wormLastPaints, paintsUntilNextPowerup,
+    wormLastPaints, wormCursors, paintsUntilNextPowerup,
     prompt, phase, roundEndMs, score, commentary,
   };
 }
@@ -480,6 +490,7 @@ function applyConfig(ctx: GameContext, partial: Record<string, unknown>): void {
   ctx.sql.exec(`DELETE FROM paint_cells WHERE x >= ? OR y >= ?`, cfg.cols, cfg.rows);
   ctx.sql.exec(`DELETE FROM paint_powerups WHERE x >= ? OR y >= ?`, cfg.cols, cfg.rows);
   ctx.sql.exec(`DELETE FROM paint_worm_last WHERE x >= ? OR y >= ?`, cfg.cols, cfg.rows);
+  ctx.sql.exec(`DELETE FROM paint_worm_cursor WHERE x >= ? OR y >= ?`, cfg.cols, cfg.rows);
 }
 
 function resetCanvas(ctx: GameContext): void {
@@ -489,6 +500,7 @@ function resetCanvas(ctx: GameContext): void {
   ctx.sql.exec(`DELETE FROM paint_effects`);
   ctx.sql.exec(`DELETE FROM paint_cooldown`);
   ctx.sql.exec(`DELETE FROM paint_worm_last`);
+  ctx.sql.exec(`DELETE FROM paint_worm_cursor`);
   ctx.sql.exec(`DELETE FROM meta WHERE key IN ('paint_last_spawn_ms', 'paint_count_since_spawn')`);
 }
 
@@ -497,6 +509,7 @@ function clearPlayers(ctx: GameContext): void {
   ctx.sql.exec(`DELETE FROM paint_effects`);
   ctx.sql.exec(`DELETE FROM paint_cooldown`);
   ctx.sql.exec(`DELETE FROM paint_worm_last`);
+  ctx.sql.exec(`DELETE FROM paint_worm_cursor`);
   ctx.sql.exec(`DELETE FROM paint_powerup_claims`);
 }
 
@@ -529,6 +542,9 @@ export const pixelHeartEngine: GameEngine<CanvasState> = {
         player_key TEXT PRIMARY KEY, last_ms INTEGER NOT NULL
       );
       CREATE TABLE IF NOT EXISTS paint_worm_last (
+        player_key TEXT PRIMARY KEY, x INTEGER NOT NULL, y INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS paint_worm_cursor (
         player_key TEXT PRIMARY KEY, x INTEGER NOT NULL, y INTEGER NOT NULL
       );
     `);
@@ -614,16 +630,18 @@ export const pixelHeartEngine: GameEngine<CanvasState> = {
       const x = Math.floor(Number(msg.x));
       const y = Math.floor(Number(msg.y));
       if (x < 0 || x >= cfg.cols || y < 0 || y >= cfg.rows) return;
-      const lastRow = [...ctx.sql.exec(`SELECT x, y FROM paint_worm_last WHERE player_key = ?`, player.id)];
-      if (lastRow.length > 0) {
-        const prevX = lastRow[0].x as number;
-        const prevY = lastRow[0].y as number;
+      // Cursor adjacency is checked against the cursor table, not the paint anchor.
+      const cursorRow = [...ctx.sql.exec(`SELECT x, y FROM paint_worm_cursor WHERE player_key = ?`, player.id)];
+      if (cursorRow.length > 0) {
+        const prevX = cursorRow[0].x as number;
+        const prevY = cursorRow[0].y as number;
         if (x === prevX && y === prevY) return;
         const dx = Math.abs(x - prevX);
         const dy = Math.abs(y - prevY);
         if (Math.max(dx, dy) > 1) return;
       }
-      ctx.sql.exec(`INSERT OR REPLACE INTO paint_worm_last (player_key, x, y) VALUES (?, ?, ?)`, player.id, x, y);
+      // Only update the cursor — paint_worm_last (the paint anchor) is unchanged.
+      ctx.sql.exec(`INSERT OR REPLACE INTO paint_worm_cursor (player_key, x, y) VALUES (?, ?, ?)`, player.id, x, y);
       ctx.broadcast({ type: 'SYNC_CANVAS', ...buildCanvasState(ctx) });
       return;
     }

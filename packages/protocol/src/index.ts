@@ -104,8 +104,10 @@ export interface CanvasState {
   /** Player ids that have claimed a power-up in the current rotation cycle. */
   claims: string[];
   config: PaintConfig;
-  /** Last painted cell per player (for worm mode adjacency hints). Keyed by player id. */
+  /** Last painted cell per player (paint anchor — determines valid next-paint positions). Keyed by player id. */
   wormLastPaints: Record<string, { x: number; y: number }>;
+  /** Keyboard cursor position per player (visual only — moves with arrow keys without painting). Keyed by player id. */
+  wormCursors: Record<string, { x: number; y: number }>;
   /** Paints remaining until the next power-up drops (count mode only), or null. */
   paintsUntilNextPowerup: number | null;
   /** Active painting prompt, or null when no round is set up. */
@@ -136,6 +138,7 @@ export function emptyCanvasState(
     claims: [],
     config: { ...DEFAULT_PAINT_CONFIG, cols, rows },
     wormLastPaints: {},
+    wormCursors: {},
     paintsUntilNextPowerup: null,
     prompt: null,
     phase: 'idle',
