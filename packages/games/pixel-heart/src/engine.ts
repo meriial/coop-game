@@ -215,27 +215,12 @@ function tryPickupPowerup(ctx: GameContext, player: Player, x: number, y: number
   const puRows = [...ctx.sql.exec(`SELECT id, kind FROM paint_powerups WHERE x = ? AND y = ?`, x, y)];
   if (puRows.length === 0) return false;
 
-  // Fairness rotation: a player who already claimed this cycle is ineligible;
-  // the power-up stays on the board until everyone else has had a turn.
-  const claimed = [...ctx.sql.exec(`SELECT 1 FROM paint_powerup_claims WHERE player_key = ?`, player.id)];
-  if (claimed.length > 0) return false;
-
   const kind = puRows[0].kind as PowerUpKind;
   ctx.sql.exec(`DELETE FROM paint_powerups WHERE id = ?`, puRows[0].id as string);
   ctx.sql.exec(
     `INSERT OR REPLACE INTO paint_effects (player_key, kind, charges) VALUES (?, ?, ?)`,
     player.id, kind, EFFECT_CHARGES[kind],
   );
-  ctx.sql.exec(
-    `INSERT OR REPLACE INTO paint_powerup_claims (player_key, claimed_ms) VALUES (?, ?)`,
-    player.id, Date.now(),
-  );
-
-  const claimCount = [...ctx.sql.exec(`SELECT COUNT(*) as c FROM paint_powerup_claims`)][0].c as number;
-  const playerCount = ctx.players().length;
-  if (claimCount >= Math.max(1, playerCount)) {
-    ctx.sql.exec(`DELETE FROM paint_powerup_claims`);
-  }
   return true;
 }
 
