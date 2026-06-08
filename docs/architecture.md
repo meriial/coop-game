@@ -187,7 +187,7 @@ The original `GameClient` in `sdk/src/client.ts` still targets `GameRoom` at `/w
 | `get_config` | Co-op canvas rules: grid, mix strength, cooldown, batch size, power-up kinds |
 | `paint` | Paint one cell (plain `GAME_PAINT`, adjacency-locked in worm mode) |
 | `wait_for_update` | Long-poll until next `SYNC_*` (or ~25s timeout) |
-| `take_action` | Send an arbitrary inbound message — used for `GAME_PAINT_PATH` (batch), `GAME_PAINT { fromCursor: true }` (free-paint), `GAME_SET_COLOR`, `MATCH_FLIP`, … |
+| `take_action` | Send an arbitrary inbound message — used for `GAME_WORM_MOVE`, `GAME_PAINT { fromCursor: true }` (stamp at walked-to cursor), `GAME_PAINT_PATH` (batch), `GAME_SET_COLOR`, `MATCH_FLIP`, … |
 
 There is no `paint_path` tool; batch via `take_action({ type: 'GAME_PAINT_PATH', payload: { cells } })` (≤ `agentBatchMax`).
 
@@ -249,7 +249,7 @@ await client.close();
 | `mcp-call.mjs` | **Generic one-shot transport.** Connects with one pinned identity, invokes one tool, prints JSON, exits. Switchable backend + identity (see below). The building block for an agent-in-the-loop. |
 | `prep-canvas.mjs` | Presenter JWT: advance to step 7, reset canvas, set grid/cooldown |
 
-> Earlier demo scripts (`draw-circle.mjs`, `creative-draw.mjs`, `verify-canvas.mjs`, `paint-agent.mjs`) were **removed** — they called the deleted `paint_path` tool and predated worm mode. Drive paints with `mcp-call.mjs` + `take_action`/`GAME_PAINT { fromCursor: true }` instead; see [game.md § Agent painting playbook](./game.md#agent-painting-playbook).
+> Earlier demo scripts (`draw-circle.mjs`, `creative-draw.mjs`, `verify-canvas.mjs`, `paint-agent.mjs`) were **removed** — they called the deleted `paint_path` tool and predated worm mode. Drive paints with `mcp-call.mjs` + `take_action` (`GAME_WORM_MOVE` then `GAME_PAINT { fromCursor: true }` at `myCursor`); see [game.md § Agent painting playbook](./game.md#agent-painting-playbook).
 
 **`mcp-call.mjs` — switch backend and identity (like the frontend can):**
 
@@ -258,7 +258,7 @@ await client.close();
 node scripts/mcp-call.mjs                 get_state    # local (localhost:8787), signed loop-bot identity
 node scripts/mcp-call.mjs --backend prod  get_state    # production, identity from frontend/.env VITE_AGENT_TOKEN
 # Free-paint a cell anywhere (worm-mode bypass):
-node scripts/mcp-call.mjs --backend prod take_action '{"type":"GAME_PAINT","payload":{"x":10,"y":8,"fromCursor":true}}'
+node scripts/mcp-call.mjs --backend prod take_action '{"type":"GAME_PAINT","payload":{"x":10,"y":8}}'
 ```
 
 | Knob (flag / env) | Meaning |
@@ -276,7 +276,7 @@ cd packages/mcp-server && npm run build
 
 node scripts/prep-canvas.mjs                            # presenter: step 7, reset, set grid
 node scripts/mcp-call.mjs get_state                     # read the canvas
-node scripts/mcp-call.mjs take_action '{"type":"GAME_PAINT","payload":{"x":10,"y":8,"fromCursor":true}}'  # free-paint
+node scripts/mcp-call.mjs take_action '{"type":"GAME_PAINT","payload":{"x":10,"y":8}}'  # adjacency-locked paint
 ```
 
 JWT: `mcp-call.mjs` signs a local token for you (default `loop-bot@twosmiles.ca`) or reads `frontend/.env` for `--backend prod`. For other scripts, sign one locally with `JWT_SECRET` from `server/.dev.vars` (see `prep-canvas.mjs`). Each distinct email gets its own player color.

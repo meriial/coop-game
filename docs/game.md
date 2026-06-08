@@ -85,9 +85,9 @@ When worm mode is enabled (`config.wormMode: true`), each paint must be within C
 
 The cursor (indigo ring) is visible to all players in real time. Clicking a cell still works as before — the click position becomes the new cursor. Arrow key moves obey the same adjacency constraint as paints; the server rejects teleport attempts silently.
 
-`GAME_WORM_MOVE { x, y }` — moves the cursor without painting; validates adjacency and updates `wormLastPaints`. Agents can use this to position before a batch paint.
+`GAME_WORM_MOVE { x, y }` — moves the cursor without painting; validates adjacency against the current cursor (or last paint if no cursor row yet) and updates `wormCursors` only. Agents use this to walk to a distant cell before stamping.
 
-**`fromCursor` bypass (how to free-paint in worm mode):** `GAME_PAINT { x, y, fromCursor: true }` **skips the adjacency check** and paints anywhere — this is how the keyboard spacebar stamps at the cursor, and it's the simplest way for an agent to draw an arbitrary (non-connected) shape without turning worm mode off. **Caveats:** `fromCursor` is only honoured on `GAME_PAINT` — `GAME_PAINT_PATH` is always worm-locked (each cell must chain adjacently from the previous). The per-player `cooldownMs` still applies. See [§ Agent painting playbook](#agent-painting-playbook).
+**`fromCursor` (keyboard spacebar / walked-to stamp):** `GAME_PAINT { x, y, fromCursor: true }` paints at the **current cursor position only** — it skips the *last-paint* adjacency check but does **not** accept arbitrary coordinates. Walk with `GAME_WORM_MOVE`, then stamp with `fromCursor: true` at `myCursor`. **Caveats:** `fromCursor` is only honoured on `GAME_PAINT` — `GAME_PAINT_PATH` is always worm-locked (each cell must chain adjacently from the previous). The per-player `cooldownMs` still applies. See [§ Agent painting playbook](#agent-painting-playbook).
 
 ### Player color picking
 
@@ -160,7 +160,7 @@ The MCP bridge (`packages/mcp-server/`) exposes co-op-canvas-aware tools so an L
 - `get_state` — compact view: dimensions, coverage, harmony, **only the painted cells** (plus an `asciiCanvas` text rendering), active power-ups, plus **your color, your active effect, and your power-up eligibility**.
 - `paint(x, y)` — single typed paint. Note: this sends a plain `GAME_PAINT` (no `fromCursor`), so in worm mode it is adjacency-locked.
 - `wait_for_update` — long-poll until the next `SYNC_*` state change (the bridge→agent leg is pull-based; MCP can't push mid-turn).
-- `take_action({ type, payload })` — send **any** inbound message. This is the escape hatch for messages without a dedicated tool: `GAME_PAINT_PATH` (batch), `GAME_PAINT` with `fromCursor: true` (free-paint, see below), `GAME_SET_COLOR`, `GAME_WORM_MOVE`, etc. It waits for the resulting `SYNC_*` before returning, so the write is delivered before the call resolves.
+- `take_action({ type, payload })` — send **any** inbound message. This is the escape hatch for messages without a dedicated tool: `GAME_WORM_MOVE`, `GAME_PAINT` with `fromCursor: true` (stamp at walked-to cursor), `GAME_PAINT_PATH` (batch), `GAME_SET_COLOR`, etc. It waits for the resulting `SYNC_*` before returning, so the write is delivered before the call resolves.
 
 > There is **no `paint_path` MCP tool** — earlier docs/builds had one, but the current bridge dropped it. Paint a path with `take_action({ type: 'GAME_PAINT_PATH', payload: { cells } })` (capped at `agentBatchMax`, one cooldown slot for the batch).
 
@@ -171,11 +171,11 @@ You do not need Cursor MCP config to use these tools — see **[architecture.md 
 Hard-won gotchas — **read this before writing an agent that paints, or your paints will silently vanish with no error.**
 
 **1. Paints are dropped silently.** Every reject path is a quiet `return false`/early-return server-side; the MCP tool still echoes `{ sent: ... }`. **Never trust the tool echo — confirm landings via a fresh `get_state`** (`paintedCount` rose, or your `{x,y}` is in `paintedCells`). The three reasons a paint vanishes:
-  - **Worm mode adjacency** — in `wormMode`, a `GAME_PAINT`/`GAME_PAINT_PATH` cell must be within Chebyshev distance 1 of your *last* paint (`paint_worm_last`). Your **first** paint (no last-paint row yet) lands anywhere. **Bypass with `GAME_PAINT { fromCursor: true }`** (not available on `GAME_PAINT_PATH`).
+  - **Worm mode adjacency** — in `wormMode`, a plain `GAME_PAINT`/`GAME_PAINT_PATH` cell must be within Chebyshev distance 1 of your *last* paint (`paint_worm_last`). Your **first** paint (no last-paint row yet) lands anywhere. To reach a distant cell, **walk** with `GAME_WORM_MOVE` then stamp with `GAME_PAINT { fromCursor: true }` at `myCursor` only (not available on `GAME_PAINT_PATH`).
   - **Cooldown** — `cooldownMs` gates every paint; faster paints are dropped. A `GAME_PAINT_PATH` batch consumes **one** cooldown slot for the whole batch.
   - **Connection lifetime** — if you fire a message and close the socket immediately, it may not be delivered. The `paint`/`take_action` tools `await waitForUpdate`, so a one-shot connect→call→close is safe; raw fire-and-forget sends are not.
 
-**2. Free-paint an arbitrary shape:** `take_action({ type: 'GAME_PAINT', payload: { x, y, fromCursor: true } })` per cell. Respect `cooldownMs` between calls (sequential `mcp-call.mjs` spawns are naturally far enough apart). Painting also blends the 8 neighbours into a halo, so outlines thicken — skeletons read better than dense fills.
+**2. Paint a distant shape:** `GAME_WORM_MOVE` one step at a time (read `myCursor` from `get_state`), then `take_action({ type: 'GAME_PAINT', payload: { x, y, fromCursor: true } })` at that cursor. Respect `cooldownMs` between calls (sequential `mcp-call.mjs` spawns are naturally far enough apart). Painting also blends the 8 neighbours into a halo, so outlines thicken — skeletons read better than dense fills.
 
 **3. Draw with multiple colours:** the room must be in `colorMode: 'pick'` (presenter-set). Then `take_action({ type: 'GAME_SET_COLOR', payload: { color } })` changes your colour for **future** paints (existing cells keep their stored colour). If `colorPalette` is non-empty the colour must be a member; otherwise any `#RRGGBB`. `GAME_SET_COLOR` is **not** presenter-only — any player/agent can set their own.
 

@@ -259,20 +259,37 @@ function maybeSpawnPowerup(ctx: GameContext, cfg: PaintConfig, now: number): voi
   }
 }
 
+// Worm keyboard cursor: paint_worm_cursor if set, else the last paint anchor.
+function getWormCursor(ctx: GameContext, playerKey: string): { x: number; y: number } | null {
+  const cursorRow = [...ctx.sql.exec(`SELECT x, y FROM paint_worm_cursor WHERE player_key = ?`, playerKey)];
+  if (cursorRow.length > 0) {
+    return { x: cursorRow[0].x as number, y: cursorRow[0].y as number };
+  }
+  const lastRow = [...ctx.sql.exec(`SELECT x, y FROM paint_worm_last WHERE player_key = ?`, playerKey)];
+  if (lastRow.length > 0) {
+    return { x: lastRow[0].x as number, y: lastRow[0].y as number };
+  }
+  return null;
+}
+
 // Applies a single paint (center + spread) and any side effects. Caller is
 // responsible for cooldown gating and broadcasting.
 function applyPaint(ctx: GameContext, player: Player, x: number, y: number, cfg: PaintConfig, now: number, opacity = 1, fromCursor = false): boolean {
   if (x < 0 || x >= cfg.cols || y < 0 || y >= cfg.rows) return false;
 
-  // Worm mode: mouse clicks must be within Chebyshev distance 1 of the last paint anchor.
-  // Spacebar (fromCursor) bypasses this — the keyboard cursor can be anywhere, having
-  // moved one step at a time via arrow keys without painting in between.
-  if (cfg.wormMode && !fromCursor) {
-    const lastRow = [...ctx.sql.exec(`SELECT x, y FROM paint_worm_last WHERE player_key = ?`, player.id)];
-    if (lastRow.length > 0) {
-      const dx = Math.abs(x - (lastRow[0].x as number));
-      const dy = Math.abs(y - (lastRow[0].y as number));
-      if (Math.max(dx, dy) > 1) return false;
+  if (cfg.wormMode) {
+    if (fromCursor) {
+      // Spacebar / cursor paint: must stamp exactly where the walked-to cursor is.
+      const cur = getWormCursor(ctx, player.id);
+      if (!cur || cur.x !== x || cur.y !== y) return false;
+    } else {
+      // Mouse click: must be within Chebyshev distance 1 of the last paint anchor.
+      const lastRow = [...ctx.sql.exec(`SELECT x, y FROM paint_worm_last WHERE player_key = ?`, player.id)];
+      if (lastRow.length > 0) {
+        const dx = Math.abs(x - (lastRow[0].x as number));
+        const dy = Math.abs(y - (lastRow[0].y as number));
+        if (Math.max(dx, dy) > 1) return false;
+      }
     }
   }
 
@@ -618,16 +635,13 @@ export const pixelHeartEngine: GameEngine<CanvasState> = {
       const x = Math.floor(Number(msg.x));
       const y = Math.floor(Number(msg.y));
       if (x < 0 || x >= cfg.cols || y < 0 || y >= cfg.rows) return;
-      // Cursor adjacency is checked against the cursor table, not the paint anchor.
-      const cursorRow = [...ctx.sql.exec(`SELECT x, y FROM paint_worm_cursor WHERE player_key = ?`, player.id)];
-      if (cursorRow.length > 0) {
-        const prevX = cursorRow[0].x as number;
-        const prevY = cursorRow[0].y as number;
-        if (x === prevX && y === prevY) return;
-        const dx = Math.abs(x - prevX);
-        const dy = Math.abs(y - prevY);
-        if (Math.max(dx, dy) > 1) return;
-      }
+      // Cursor adjacency is checked against the cursor (or last paint if no cursor yet).
+      const cur = getWormCursor(ctx, player.id);
+      if (!cur) return;
+      if (x === cur.x && y === cur.y) return;
+      const dx = Math.abs(x - cur.x);
+      const dy = Math.abs(y - cur.y);
+      if (Math.max(dx, dy) > 1) return;
       // Only update the cursor — paint_worm_last (the paint anchor) is unchanged.
       ctx.sql.exec(`INSERT OR REPLACE INTO paint_worm_cursor (player_key, x, y) VALUES (?, ?, ?)`, player.id, x, y);
       ctx.broadcast({ type: 'SYNC_CANVAS', ...buildCanvasState(ctx) });

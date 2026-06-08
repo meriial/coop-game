@@ -29,7 +29,7 @@
  * Examples:
  *   node scripts/mcp-call.mjs get_state
  *   node scripts/mcp-call.mjs --backend prod get_state
- *   node scripts/mcp-call.mjs --backend prod take_action '{"type":"GAME_PAINT","payload":{"x":10,"y":8,"fromCursor":true}}'
+ *   node scripts/mcp-call.mjs --backend prod take_action '{"type":"GAME_PAINT","payload":{"x":10,"y":8}}'
  */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';

@@ -304,10 +304,10 @@ node scripts/prep-canvas.mjs
 node scripts/mcp-call.mjs get_state
 
 # Free-paint a cell anywhere (worm-mode bypass); --backend prod to hit production:
-node scripts/mcp-call.mjs take_action '{"type":"GAME_PAINT","payload":{"x":10,"y":8,"fromCursor":true}}'
+node scripts/mcp-call.mjs take_action '{"type":"GAME_PAINT","payload":{"x":10,"y":8}}'
 ```
 
-> The older demo scripts (`draw-circle.mjs`, `creative-draw.mjs`, `paint-agent.mjs`, `verify-canvas.mjs`) were **removed** — they called the deleted `paint_path` tool. Drive paints with `mcp-call.mjs` + `take_action`/`GAME_PAINT { fromCursor: true }`; see [game.md § Agent painting playbook](./game.md#agent-painting-playbook).
+> The older demo scripts (`draw-circle.mjs`, `creative-draw.mjs`, `paint-agent.mjs`, `verify-canvas.mjs`) were **removed** — they called the deleted `paint_path` tool. Drive paints with `mcp-call.mjs` + `take_action` (`GAME_WORM_MOVE` then stamp at `myCursor`); see [game.md § Agent painting playbook](./game.md#agent-painting-playbook).
 
 Scripts live in `packages/mcp-server/scripts/`. JWT: use section 4 token, `frontend/.env` `VITE_AGENT_TOKEN`, or sign locally with `JWT_SECRET` from `server/.dev.vars` (see `prep-canvas.mjs`).
 
@@ -420,7 +420,7 @@ From repo root: `npm run login:dev` runs the dry-run flow against `http://localh
 | Participant setup | `./setup.sh http://localhost:8787 you@your-allowed-domain.example` |
 | Presenter UI | `http://localhost:5174/?token=<jwt>` |
 | MCP read (scripted) | `cd packages/mcp-server && node scripts/mcp-call.mjs get_state` |
-| MCP free-paint demo | `node packages/mcp-server/scripts/mcp-call.mjs take_action '{"type":"GAME_PAINT","payload":{"x":10,"y":8,"fromCursor":true}}'` |
+| MCP paint demo | `node packages/mcp-server/scripts/mcp-call.mjs take_action '{"type":"GAME_PAINT","payload":{"x":10,"y":8}}'` |
 
 ## Troubleshooting
 

@@ -70,7 +70,7 @@ The workshop exposes a stdio MCP server (`packages/mcp-server`) with tools `get_
 cd packages/mcp-server && npm run build
 node scripts/mcp-call.mjs get_state                    # read the canvas (generic switchable transport)
 node scripts/mcp-call.mjs --backend prod get_state     # ...or hit production
-node scripts/mcp-call.mjs take_action '{"type":"GAME_PAINT","payload":{"x":10,"y":8,"fromCursor":true}}'  # free-paint
+node scripts/mcp-call.mjs take_action '{"type":"GAME_PAINT","payload":{"x":10,"y":8}}'  # worm-mode paint
 ```
 
 Before writing an agent that paints, read the **[Agent painting playbook](docs/game.md#agent-painting-playbook)** — worm mode, cooldown, and silent paint-drops will trip you up otherwise.

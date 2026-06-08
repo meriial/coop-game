@@ -109,6 +109,8 @@ function pixelHeartView(snapshot: PresentationSnapshot) {
   const s = snapshot.pixelHeart;
   const myKey = myPlayerKey(snapshot);
   const myColor = s.players[myKey]?.color ?? null;
+  const myLastPaint = s.wormLastPaints[myKey] ?? null;
+  const myCursor = s.wormCursors[myKey] ?? myLastPaint;
   const paintedCells: { x: number; y: number; color: string }[] = [];
   for (let y = 0; y < s.canvas.length; y++) {
     const row = s.canvas[y];
@@ -125,6 +127,8 @@ function pixelHeartView(snapshot: PresentationSnapshot) {
     harmony: s.harmony,
     config: s.config,
     myColor,
+    myCursor,
+    myLastPaint,
     myEffect: s.effects[myKey] ?? null,
     powerupEligible: !s.claims.includes(myKey),
     powerups: s.powerups,
@@ -242,11 +246,17 @@ async function main() {
               max: cfg.powerupMax,
               kinds: POWERUP_BLURBS,
             },
+            wormMode: cfg.wormMode,
             rules: [
               'Painting a cell fills it with your color; the 8 neighbours blend toward your color (empty neighbours become half-transparent).',
               'Repeated paints accumulate, building gradients where colors meet.',
               'Painting onto a power-up cell grants its blend-mode effect for a few paints. You cannot grab another until everyone else has claimed one.',
               `Paints are rate-limited to one per ${cfg.cooldownMs}ms.`,
+              ...(cfg.wormMode ? [
+                'Worm mode: your first paint lands anywhere; later mouse-style paints must be adjacent to your last paint.',
+                'To reach a distant cell, walk one step at a time with GAME_WORM_MOVE, then GAME_PAINT { fromCursor: true } at myCursor — fromCursor only stamps the walked-to cursor, not arbitrary coordinates.',
+                'GAME_PAINT_PATH chains adjacent cells in one batch (still worm-locked, no fromCursor bypass).',
+              ] : []),
             ],
           }, null, 2),
         }],
