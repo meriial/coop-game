@@ -24,6 +24,10 @@ export interface MatchState {
   matchElementCount: number;
   matchPendingTimeoutMs: number;
   gameOver: boolean;
+  catchUpEnabled: boolean;
+  showCooldown: boolean;
+  /** player_key → absolute timestamp (ms) when cooldown expires */
+  matchCooldowns: Record<string, number>;
 }
 
 /** Power-up effects double as blend modes that change how the next few paints behave. */
@@ -52,8 +56,15 @@ export interface PaintConfig {
   /** Max cells an agent may paint in a single GAME_PAINT_PATH batch. */
   agentBatchMax: number;
   powerupsEnabled: boolean;
+  /** Used when powerupMode === 'time'. */
   powerupIntervalMs: number;
   powerupMax: number;
+  /** When enabled, each paint must be adjacent (Chebyshev ≤ 1) to the player's last paint. */
+  wormMode: boolean;
+  /** 'time': spawn on a timer; 'count': spawn after playerCount × powerupPaintsPerPlayer paints. */
+  powerupMode: 'time' | 'count';
+  /** Paints per player before a power-up drops (used when powerupMode === 'count'). */
+  powerupPaintsPerPlayer: number;
 }
 
 export const DEFAULT_PAINT_CONFIG: PaintConfig = {
@@ -65,6 +76,9 @@ export const DEFAULT_PAINT_CONFIG: PaintConfig = {
   powerupsEnabled: true,
   powerupIntervalMs: 12_000,
   powerupMax: 3,
+  wormMode: false,
+  powerupMode: 'time',
+  powerupPaintsPerPlayer: 3,
 };
 
 export interface CanvasState {
@@ -83,6 +97,10 @@ export interface CanvasState {
   /** Player ids that have claimed a power-up in the current rotation cycle. */
   claims: string[];
   config: PaintConfig;
+  /** Last painted cell per player (for worm mode adjacency hints). Keyed by player id. */
+  wormLastPaints: Record<string, { x: number; y: number }>;
+  /** Paints remaining until the next power-up drops (count mode only), or null. */
+  paintsUntilNextPowerup: number | null;
 }
 
 export function emptyCanvasState(
@@ -100,6 +118,8 @@ export function emptyCanvasState(
     effects: {},
     claims: [],
     config: { ...DEFAULT_PAINT_CONFIG, cols, rows },
+    wormLastPaints: {},
+    paintsUntilNextPowerup: null,
   };
 }
 
@@ -117,11 +137,14 @@ export type InboundMsg =
   | { type: 'GAME_PAINT_PATH'; cells: { x: number; y: number }[] }
   | { type: 'GAME_CONFIG'; config: Partial<PaintConfig> }
   | { type: 'GAME_RESET' }
+  | { type: 'GAME_DROP_POWERUP' }
   | { type: 'MATCH_FLIP'; pos: number }
   | { type: 'MATCH_PAUSE' }
   | { type: 'MATCH_RESET' }
   | { type: 'MATCH_SET_SIZE'; count: number }
-  | { type: 'MATCH_SET_TIMEOUT'; seconds: number };
+  | { type: 'MATCH_SET_TIMEOUT'; seconds: number }
+  | { type: 'MATCH_SET_CATCHUP'; enabled: boolean }
+  | { type: 'MATCH_SET_SHOW_COOLDOWN'; enabled: boolean };
 
 export type OutboundMsg =
   | ({ type: 'WELCOME'; stepIndex: number; role: string; pollResults: Record<string, Record<string, number>>; pollValues: Record<string, string[]> } & CanvasState & MatchState)

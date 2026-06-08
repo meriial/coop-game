@@ -36,6 +36,9 @@ export function PeriodicMatch({
     gameOver: matchGameOver,
     matchElementCount,
     matchPendingTimeoutMs,
+    catchUpEnabled,
+    showCooldown,
+    matchCooldowns,
   } = state;
 
   const gridRef = useRef<HTMLDivElement>(null);
@@ -116,6 +119,18 @@ export function PeriodicMatch({
     send({ type: 'GAME_JOIN', name: myName });
   }, [send, myName]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Cooldown ticker: re-computes remaining ms every 100ms so the display stays live.
+  const me = matchScores.find((p) => p.name === myName);
+  const myCooldownUntil = me ? (matchCooldowns[me.id] ?? 0) : 0;
+  const [cooldownRemaining, setCooldownRemaining] = useState(0);
+  useEffect(() => {
+    const tick = () => setCooldownRemaining(Math.max(0, myCooldownUntil - Date.now()));
+    tick();
+    if (myCooldownUntil <= Date.now()) return;
+    const id = setInterval(tick, 100);
+    return () => clearInterval(id);
+  }, [myCooldownUntil]);
+
   const handleFlip = useCallback((pos: number) => {
     send({ type: 'MATCH_FLIP', pos });
   }, [send]);
@@ -144,6 +159,7 @@ export function PeriodicMatch({
   const totalPairs = matchBoard.length / 2;
   const claimedPairs = matchClaimed.filter((c) => c !== null).length / 2;
   const progressPct = totalPairs > 0 ? (claimedPairs / totalPairs) * 100 : 0;
+  const isOnCooldown = cooldownRemaining > 0;
 
   return (
     <div className="w-full h-full flex overflow-hidden bg-slate-950 relative">
@@ -169,6 +185,18 @@ export function PeriodicMatch({
           />
         </div>
 
+        {/* Cooldown notice for this participant */}
+        {showCooldown && isOnCooldown && (
+          <div className="flex items-center justify-center gap-2 shrink-0">
+            <div className="px-3 py-1 bg-amber-900/40 border border-amber-600/40 rounded-full text-amber-300 text-xs">
+              Ready in{' '}
+              <span className="font-bold tabular-nums">
+                {(cooldownRemaining / 1000).toFixed(1)}s
+              </span>
+            </div>
+          </div>
+        )}
+
         <div
           ref={gridRef}
           className="flex-1 overflow-hidden"
@@ -188,7 +216,7 @@ export function PeriodicMatch({
             const isPending = pendingColor !== undefined;
             const isRevealed = revealedColor !== undefined;
             const faceUpColor = pendingColor ?? revealedColor ?? null;
-            const isClickable = !isClaimed && !isPending && !isRevealed && !matchPaused && !matchGameOver;
+            const isClickable = !isClaimed && !isPending && !isRevealed && !matchPaused && !matchGameOver && !isOnCooldown;
 
             return (
               <Tile
@@ -197,7 +225,7 @@ export function PeriodicMatch({
                 claimedColor={claimedColor}
                 pendingColor={faceUpColor}
                 isClickable={isClickable}
-                dimmed={matchPaused && !isClaimed}
+                dimmed={(matchPaused || isOnCooldown) && !isClaimed}
                 tileSize={tileSize}
                 onClick={isClickable ? () => handleFlip(pos) : undefined}
               />
@@ -312,6 +340,35 @@ export function PeriodicMatch({
             >
               Reshuffle
             </button>
+
+            {/* Rule toggles */}
+            <div className="flex flex-col gap-2 pt-2 border-t border-slate-700/40">
+              <span className="text-slate-500 text-[10px] uppercase tracking-wider font-medium">Rules</span>
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 shrink-0"
+                  checked={catchUpEnabled}
+                  onChange={(e) => send({ type: 'MATCH_SET_CATCHUP', enabled: e.target.checked })}
+                />
+                <span className="flex flex-col gap-0.5">
+                  <span className="text-slate-300 text-xs">Catch-up</span>
+                  <span className="text-slate-600 text-[10px]">Leaders get longer cooldowns</span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 shrink-0"
+                  checked={showCooldown}
+                  onChange={(e) => send({ type: 'MATCH_SET_SHOW_COOLDOWN', enabled: e.target.checked })}
+                />
+                <span className="flex flex-col gap-0.5">
+                  <span className="text-slate-300 text-xs">Show cooldown</span>
+                  <span className="text-slate-600 text-[10px]">Participants see countdown</span>
+                </span>
+              </label>
+            </div>
           </div>
         )}
       </div>

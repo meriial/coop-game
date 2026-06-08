@@ -51,6 +51,9 @@ export class PresentationClient {
     matchElementCount: 118,
     matchPendingTimeoutMs: 5000,
     gameOver: false,
+    catchUpEnabled: false,
+    showCooldown: false,
+    matchCooldowns: {},
   };
   private pixelHeart: CanvasState = emptyCanvasState();
   private identity: AgentIdentity = { name: 'Guest', ownerId: '', isAgent: false };
@@ -179,6 +182,9 @@ export class PresentationClient {
           matchElementCount: msg.matchElementCount,
           matchPendingTimeoutMs: msg.matchPendingTimeoutMs,
           gameOver: msg.gameOver,
+          catchUpEnabled: msg.catchUpEnabled,
+          showCooldown: msg.showCooldown,
+          matchCooldowns: msg.matchCooldowns,
         };
         this.pixelHeart = extractCanvasState(msg);
         this.bump();
@@ -198,6 +204,9 @@ export class PresentationClient {
           matchElementCount: msg.matchElementCount,
           matchPendingTimeoutMs: msg.matchPendingTimeoutMs,
           gameOver: msg.gameOver,
+          catchUpEnabled: msg.catchUpEnabled,
+          showCooldown: msg.showCooldown,
+          matchCooldowns: msg.matchCooldowns,
         };
         this.bump();
         break;
@@ -224,6 +233,8 @@ function extractCanvasState(msg: OutboundMsg & Partial<CanvasState>): CanvasStat
     effects: msg.effects ?? {},
     claims: msg.claims ?? [],
     config: msg.config ?? base.config,
+    wormLastPaints: msg.wormLastPaints ?? {},
+    paintsUntilNextPowerup: msg.paintsUntilNextPowerup ?? null,
   };
 }
 

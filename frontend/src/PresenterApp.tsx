@@ -2,8 +2,6 @@ import { useEffect, useState } from 'react';
 import { Volume2, VolumeX, Presentation, User } from 'lucide-react';
 import { presentationSteps, stepHasSound } from './config/presentationConfig';
 import type { WsState } from './hooks/useWebSocket';
-import type { CanvasState } from '@workshop/protocol';
-import { CanvasGridControls } from '@workshop/game-pixel-heart/grid-controls';
 import { StageRenderer } from './components/StageRenderer';
 import { useSoundContext } from './contexts/SoundContext';
 import { UserSwitcher } from './UserSwitcher';
@@ -22,10 +20,6 @@ interface Props {
 export function PresenterApp({ state, send, myName, myOwner, token, onToggleDevRole, myVotes, setMyVote }: Props) {
   const step = presentationSteps[state.stepIndex] ?? presentationSteps[0];
   const isGame = step.type === 'game';
-  const isPixelHeart = isGame && step.gameId === 'pixel-heart';
-  const canvasState = isPixelHeart
-    ? (state.games['pixel-heart'] as CanvasState | undefined)
-    : undefined;
   const { muted, toggleMute } = useSoundContext();
   const total = presentationSteps.length;
   const [usersOpen, setUsersOpen] = useState(false);
@@ -135,13 +129,6 @@ export function PresenterApp({ state, send, myName, myOwner, token, onToggleDevR
         </div>
 
         <div className="flex items-center gap-3">
-          {isPixelHeart && canvasState && (
-            <CanvasGridControls
-              compact
-              config={canvasState.config}
-              onChange={(patch) => send({ type: 'GAME_CONFIG', config: patch })}
-            />
-          )}
           <button
             onClick={() => goTo(state.stepIndex - 1)}
             disabled={state.stepIndex === 0}

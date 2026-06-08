@@ -15,6 +15,9 @@ const EMPTY_MATCH: PeriodicMatchState = {
   matchElementCount: 118,
   matchPendingTimeoutMs: 5000,
   gameOver: false,
+  catchUpEnabled: false,
+  showCooldown: false,
+  matchCooldowns: {},
 };
 
 clientGameRegistry.register<PeriodicMatchState>({

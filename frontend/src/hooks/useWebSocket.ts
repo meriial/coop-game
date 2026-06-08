@@ -32,6 +32,9 @@ const DEFAULT_STATE: WsState = {
       matchElementCount: 118,
       matchPendingTimeoutMs: 5000,
       gameOver: false,
+      catchUpEnabled: false,
+      showCooldown: false,
+      matchCooldowns: {},
     } satisfies MatchState,
   },
   connectedUsers: [],
@@ -51,6 +54,9 @@ function patchPeriodicMatch(msg: Record<string, unknown>): MatchState {
     matchElementCount: (msg.matchElementCount as number) ?? 118,
     matchPendingTimeoutMs: (msg.matchPendingTimeoutMs as number) ?? 5000,
     gameOver: (msg.gameOver as boolean) ?? false,
+    catchUpEnabled: (msg.catchUpEnabled as boolean) ?? false,
+    showCooldown: (msg.showCooldown as boolean) ?? false,
+    matchCooldowns: (msg.matchCooldowns as Record<string, number>) ?? {},
   };
 }
 
@@ -67,6 +73,8 @@ function patchCanvas(msg: Record<string, unknown>): CanvasState {
     effects: (msg.effects as CanvasState['effects']) ?? {},
     claims: (msg.claims as string[]) ?? [],
     config: (msg.config as CanvasState['config']) ?? base.config,
+    wormLastPaints: (msg.wormLastPaints as CanvasState['wormLastPaints']) ?? {},
+    paintsUntilNextPowerup: (msg.paintsUntilNextPowerup as number | null) ?? null,
   };
 }
 

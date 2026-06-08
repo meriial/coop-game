@@ -18,6 +18,10 @@ const MIN_PENDING_TIMEOUT_SEC = 1;
 const MAX_PENDING_TIMEOUT_SEC = 60;
 const REVEAL_DURATION_MS = 1000;
 
+// Catch-up rule constants — change these to tune the mechanic.
+const CATCHUP_ACTIVE_WINDOW_MS = 20_000;
+const CATCHUP_MAX_COOLDOWN_MS = 5_000;
+
 function getPendingTimeoutMs(ctx: GameContext): number {
   const raw = ctx.meta.get('match_pending_timeout_ms');
   if (!raw) return DEFAULT_PENDING_TIMEOUT_MS;
@@ -25,14 +29,27 @@ function getPendingTimeoutMs(ctx: GameContext): number {
   return Number.isFinite(parsed) ? parsed : DEFAULT_PENDING_TIMEOUT_MS;
 }
 
-// Reschedules the durable-object alarm to the earliest expiry across both the
-// lone-pending tiles (camp timeout) and the revealed mismatched tiles.
+// Returns the cooldown in ms to impose on a leader under catch-up mode.
+// activePairs: all active players' pair counts (including the current player).
+function catchupCooldownMs(myPairs: number, activePairs: number[]): number {
+  if (activePairs.length === 0) return 0;
+  const lowestPairs = Math.min(...activePairs);
+  const leaderPairs = Math.max(...activePairs);
+  if (leaderPairs === 0) return 0;
+  const gap = Math.max(0, myPairs - lowestPairs);
+  return Math.min(CATCHUP_MAX_COOLDOWN_MS, (gap / leaderPairs) * CATCHUP_MAX_COOLDOWN_MS);
+}
+
+// Reschedules the durable-object alarm to the earliest expiry across pending tiles,
+// mismatched reveals, and catch-up cooldowns.
 async function scheduleNextAlarm(ctx: GameContext): Promise<void> {
   const rows = [...ctx.sql.exec(`
     SELECT MIN(t) as next FROM (
       SELECT MIN(expiry_ms) as t FROM match_pending
       UNION ALL
       SELECT MIN(expiry_ms) as t FROM match_reveal
+      UNION ALL
+      SELECT MIN(cooldown_until_ms) as t FROM match_cooldown
     )
   `)];
   const next = rows[0]?.next as number | null;
@@ -105,6 +122,14 @@ function buildMatchState(ctx: GameContext): MatchState {
     count: Math.floor((r.cnt as number) / 2),
   }));
 
+  const catchUpEnabled = ctx.meta.get('match_catchup_enabled') === 'true';
+  const showCooldown = ctx.meta.get('match_show_cooldown') === 'true';
+
+  const matchCooldowns: Record<string, number> = {};
+  for (const row of ctx.sql.exec(`SELECT player_key, cooldown_until_ms FROM match_cooldown`)) {
+    matchCooldowns[row.player_key as string] = row.cooldown_until_ms as number;
+  }
+
   return {
     matchBoard,
     matchClaimed,
@@ -115,12 +140,20 @@ function buildMatchState(ctx: GameContext): MatchState {
     matchElementCount,
     matchPendingTimeoutMs: getPendingTimeoutMs(ctx),
     gameOver: claimedCount === matchBoard.length,
+    catchUpEnabled,
+    showCooldown,
+    matchCooldowns,
   };
 }
 
 async function handleFlip(player: Player, pos: number, ctx: GameContext): Promise<void> {
   if (pos < 0 || pos >= ELEMENTS.length * 2) return;
   if (ctx.meta.get('match_paused') === 'true') return;
+
+  // Enforce catch-up cooldown before any flip.
+  const now = Date.now();
+  const cooldownRow = [...ctx.sql.exec(`SELECT cooldown_until_ms FROM match_cooldown WHERE player_key = ?`, player.id)];
+  if (cooldownRow.length > 0 && (cooldownRow[0].cooldown_until_ms as number) > now) return;
 
   const claimedAt = [...ctx.sql.exec(`SELECT pos FROM match_claimed WHERE pos = ?`, pos)];
   if (claimedAt.length > 0) return;
@@ -140,6 +173,9 @@ async function handleFlip(player: Player, pos: number, ctx: GameContext): Promis
   if (symbolRow.length === 0) return;
   const symbol = symbolRow[0].symbol as string;
 
+  // Record activity for catch-up window tracking.
+  ctx.sql.exec(`INSERT OR REPLACE INTO match_activity (player_key, last_flip_ms) VALUES (?, ?)`, playerKey, now);
+
   const myPending = [...ctx.sql.exec(`SELECT pos FROM match_pending WHERE player_key = ?`, playerKey)];
 
   if (myPending.length === 0) {
@@ -147,7 +183,7 @@ async function handleFlip(player: Player, pos: number, ctx: GameContext): Promis
     if (playerReveal.length > 0) return;
     // A lone flipped tile auto-unflips after the camp timeout so players cannot
     // sit on a revealed tile indefinitely.
-    const expiry = Date.now() + getPendingTimeoutMs(ctx);
+    const expiry = now + getPendingTimeoutMs(ctx);
     ctx.sql.exec(`INSERT OR REPLACE INTO match_pending VALUES (?, ?, ?)`, playerKey, pos, expiry);
     await scheduleNextAlarm(ctx);
   } else {
@@ -162,10 +198,33 @@ async function handleFlip(player: Player, pos: number, ctx: GameContext): Promis
       ctx.sql.exec(`INSERT OR REPLACE INTO match_claimed VALUES (?, ?, ?)`, pos, playerKey, playerColor);
       ctx.sql.exec(`INSERT OR REPLACE INTO match_claimed VALUES (?, ?, ?)`, firstPos, playerKey, playerColor);
     } else {
-      const expiry = Date.now() + REVEAL_DURATION_MS;
+      const expiry = now + REVEAL_DURATION_MS;
       ctx.sql.exec(`INSERT OR REPLACE INTO match_reveal VALUES (?, ?, ?, ?)`, pos, playerColor, expiry, playerKey);
       ctx.sql.exec(`INSERT OR REPLACE INTO match_reveal VALUES (?, ?, ?, ?)`, firstPos, playerColor, expiry, playerKey);
     }
+
+    // Apply catch-up cooldown after a completed pair attempt (match or mismatch).
+    if (ctx.meta.get('match_catchup_enabled') === 'true') {
+      const activeWindow = now - CATCHUP_ACTIVE_WINDOW_MS;
+      const activeRows = [...ctx.sql.exec(`
+        SELECT p.id, COUNT(mc.pos) as cnt
+        FROM players p
+        INNER JOIN match_activity a ON a.player_key = p.id AND a.last_flip_ms > ?
+        LEFT JOIN match_claimed mc ON mc.player_key = p.id
+        GROUP BY p.id
+      `, activeWindow)];
+      const activePairs = activeRows.map((r) => Math.floor((r.cnt as number) / 2));
+      const myRow = activeRows.find((r) => r.id === playerKey);
+      const myPairs = myRow ? Math.floor((myRow.cnt as number) / 2) : 0;
+      const cooldown = catchupCooldownMs(myPairs, activePairs);
+      if (cooldown > 0) {
+        ctx.sql.exec(
+          `INSERT OR REPLACE INTO match_cooldown (player_key, cooldown_until_ms) VALUES (?, ?)`,
+          playerKey, now + cooldown,
+        );
+      }
+    }
+
     await scheduleNextAlarm(ctx);
   }
 
@@ -175,7 +234,10 @@ async function handleFlip(player: Player, pos: number, ctx: GameContext): Promis
 export const periodicMatchEngine: GameEngine<MatchState> = {
   id: 'periodic-match',
   config: { maxAgentsPerOwner: 1 },
-  inboundTypes: ['MATCH_FLIP', 'MATCH_PAUSE', 'MATCH_RESET', 'MATCH_SET_SIZE', 'MATCH_SET_TIMEOUT'],
+  inboundTypes: [
+    'MATCH_FLIP', 'MATCH_PAUSE', 'MATCH_RESET', 'MATCH_SET_SIZE', 'MATCH_SET_TIMEOUT',
+    'MATCH_SET_CATCHUP', 'MATCH_SET_SHOW_COOLDOWN',
+  ],
 
   initSchema(ctx) {
     ctx.sql.exec(`
@@ -190,6 +252,12 @@ export const periodicMatchEngine: GameEngine<MatchState> = {
       );
       CREATE TABLE IF NOT EXISTS match_reveal (
         pos INTEGER PRIMARY KEY, color TEXT NOT NULL, expiry_ms INTEGER NOT NULL, player_key TEXT NOT NULL DEFAULT ''
+      );
+      CREATE TABLE IF NOT EXISTS match_activity (
+        player_key TEXT PRIMARY KEY, last_flip_ms INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS match_cooldown (
+        player_key TEXT PRIMARY KEY, cooldown_until_ms INTEGER NOT NULL
       );
     `);
     try {
@@ -222,6 +290,8 @@ export const periodicMatchEngine: GameEngine<MatchState> = {
       ctx.sql.exec(`DELETE FROM match_claimed`);
       ctx.sql.exec(`DELETE FROM match_pending`);
       ctx.sql.exec(`DELETE FROM match_reveal`);
+      ctx.sql.exec(`DELETE FROM match_activity`);
+      ctx.sql.exec(`DELETE FROM match_cooldown`);
       ctx.sql.exec(`DELETE FROM meta WHERE key = 'match_paused'`);
       initMatchBoard(ctx);
       ctx.broadcast({ type: 'SYNC_MATCH', ...buildMatchState(ctx) });
@@ -240,6 +310,16 @@ export const periodicMatchEngine: GameEngine<MatchState> = {
       );
       ctx.meta.set('match_pending_timeout_ms', String(seconds * 1000));
       ctx.broadcast({ type: 'SYNC_MATCH', ...buildMatchState(ctx) });
+      return;
+    }
+    if (msg.type === 'MATCH_SET_CATCHUP') {
+      ctx.meta.set('match_catchup_enabled', msg.enabled ? 'true' : 'false');
+      ctx.broadcast({ type: 'SYNC_MATCH', ...buildMatchState(ctx) });
+      return;
+    }
+    if (msg.type === 'MATCH_SET_SHOW_COOLDOWN') {
+      ctx.meta.set('match_show_cooldown', msg.enabled ? 'true' : 'false');
+      ctx.broadcast({ type: 'SYNC_MATCH', ...buildMatchState(ctx) });
     }
   },
 
@@ -251,6 +331,7 @@ export const periodicMatchEngine: GameEngine<MatchState> = {
     const now = Date.now();
     ctx.sql.exec(`DELETE FROM match_reveal WHERE expiry_ms <= ?`, now);
     ctx.sql.exec(`DELETE FROM match_pending WHERE expiry_ms <= ?`, now);
+    ctx.sql.exec(`DELETE FROM match_cooldown WHERE cooldown_until_ms <= ?`, now);
     ctx.broadcast({ type: 'SYNC_MATCH', ...buildMatchState(ctx) });
     await scheduleNextAlarm(ctx);
   },

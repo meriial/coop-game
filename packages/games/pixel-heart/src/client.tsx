@@ -7,10 +7,10 @@ import { CanvasGridControls } from './GridControls';
 const GAP = 1;
 
 const POWERUP_META: Record<PowerUpKind, { icon: string; label: string; blurb: string }> = {
-  bloom: { icon: '\u273F', label: 'Bloom', blurb: 'Your next paints blend much more strongly \u2014 lush, saturated edges.' },
-  prism: { icon: '\u25C8', label: 'Prism', blurb: 'Your color cycles through the rainbow with every paint.' },
-  supernova: { icon: '\u2737', label: 'Supernova', blurb: 'Your paints spread two cells out instead of one.' },
-  additive: { icon: '\u2724', label: 'Additive', blurb: 'Neighbors blend by adding light \u2014 colors brighten as they overlap.' },
+  bloom: { icon: '✿', label: 'Bloom', blurb: 'Your next paints blend much more strongly — lush, saturated edges.' },
+  prism: { icon: '◈', label: 'Prism', blurb: 'Your color cycles through the rainbow with every paint.' },
+  supernova: { icon: '✷', label: 'Supernova', blurb: 'Your paints spread two cells out instead of one.' },
+  additive: { icon: '✤', label: 'Additive', blurb: 'Neighbors blend by adding light — colors brighten as they overlap.' },
 };
 
 function useBoardSize(cols: number, rows: number) {
@@ -40,7 +40,7 @@ function useBoardSize(cols: number, rows: number) {
 export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<PixelHeartState>) {
   const { cols, rows, canvas, config } = state;
   const { wrapRef, cell } = useBoardSize(cols, rows);
-  const [showConfig, setShowConfig] = useState(false);
+  const [showDrawer, setShowDrawer] = useState(false);
 
   useEffect(() => {
     send({ type: 'GAME_JOIN', name: myName });
@@ -49,13 +49,27 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
   const handlePaint = (x: number, y: number) => send({ type: 'GAME_PAINT', x, y });
   const handleReset = () => send({ type: 'GAME_RESET' });
   const setConfig = (patch: Record<string, unknown>) => send({ type: 'GAME_CONFIG', config: patch });
+  const handleDropPowerup = () => send({ type: 'GAME_DROP_POWERUP' });
 
   const players = Object.values(state.players);
   const me = players.find((p) => p.name === myName);
   const myEffect = me ? state.effects[me.id] : undefined;
+  const myLastPaint = me ? state.wormLastPaints[me.id] : undefined;
 
   const powerupAt = new Map<string, PowerUpKind>();
   for (const pu of state.powerups) powerupAt.set(`${pu.x},${pu.y}`, pu.kind);
+
+  // Worm mode: compute valid adjacent cells to highlight.
+  const wormValidSet = config.wormMode && myLastPaint
+    ? new Set(
+        [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]
+          .map(([dx, dy]) => `${myLastPaint.x + dx!},${myLastPaint.y + dy!}`)
+          .filter((k) => {
+            const [kx, ky] = k.split(',').map(Number);
+            return kx! >= 0 && kx! < cols && ky! >= 0 && ky! < rows;
+          }),
+      )
+    : null;
 
   const boardW = cell * cols + GAP * (cols - 1);
   const boardH = cell * rows + GAP * (rows - 1);
@@ -69,8 +83,8 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
           <span className="text-fuchsia-300">{state.harmony}% harmony</span>
           <span className="text-slate-400">{players.length} player{players.length !== 1 ? 's' : ''}</span>
           {isHost && (
-            <button onClick={() => setShowConfig((v) => !v)} className="text-indigo-300 hover:text-indigo-200">
-              {showConfig ? 'Hide settings' : 'Settings'}
+            <button onClick={() => setShowDrawer(true)} className="text-indigo-300 hover:text-indigo-200">
+              Settings
             </button>
           )}
           {isHost && (
@@ -84,36 +98,7 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
           <span className="text-lg leading-none">{POWERUP_META[myEffect.kind].icon}</span>
           <span className="text-indigo-200 font-semibold">{POWERUP_META[myEffect.kind].label}</span>
           <span className="text-indigo-300/80">x{myEffect.charges} left</span>
-          <span className="text-indigo-300/60 hidden sm:inline">{'\u2014'} {POWERUP_META[myEffect.kind].blurb}</span>
-        </div>
-      )}
-
-      {isHost && showConfig && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-slate-900/70 border border-slate-700 rounded-xl p-3 text-xs text-slate-300">
-          <CanvasGridControls
-            config={config}
-            onChange={(patch) => setConfig(patch)}
-          />
-          <label className="flex flex-col gap-1">
-            <span>Mix strength: {config.mixStrength.toFixed(2)}</span>
-            <input type="range" min={0.05} max={0.95} step={0.05} value={config.mixStrength}
-              onChange={(e) => setConfig({ mixStrength: Number(e.target.value) })} />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span>Cooldown: {config.cooldownMs}ms</span>
-            <input type="range" min={0} max={2000} step={50} value={config.cooldownMs}
-              onChange={(e) => setConfig({ cooldownMs: Number(e.target.value) })} />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span>Power-up every: {Math.round(config.powerupIntervalMs / 1000)}s</span>
-            <input type="range" min={2} max={120} value={Math.round(config.powerupIntervalMs / 1000)}
-              onChange={(e) => setConfig({ powerupIntervalMs: Number(e.target.value) * 1000 })} />
-          </label>
-          <label className="flex items-center gap-2 mt-4">
-            <input type="checkbox" checked={config.powerupsEnabled}
-              onChange={(e) => setConfig({ powerupsEnabled: e.target.checked })} />
-            <span>Power-ups enabled</span>
-          </label>
+          <span className="text-indigo-300/60 hidden sm:inline">{'—'} {POWERUP_META[myEffect.kind].blurb}</span>
         </div>
       )}
 
@@ -132,11 +117,17 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
             Array.from({ length: cols }, (_, x) => {
               const color = canvas[y]?.[x] ?? null;
               const pu = powerupAt.get(`${x},${y}`);
+              const isWormValid = wormValidSet?.has(`${x},${y}`);
+              const isWormCenter = config.wormMode && myLastPaint && myLastPaint.x === x && myLastPaint.y === y;
               return (
                 <div
                   key={`${x}-${y}`}
                   onClick={() => handlePaint(x, y)}
-                  className="cursor-pointer hover:brightness-150 transition-[filter] duration-75 flex items-center justify-center"
+                  className={[
+                    'cursor-pointer hover:brightness-150 transition-[filter] duration-75 flex items-center justify-center',
+                    isWormCenter ? 'ring-1 ring-inset ring-indigo-400/80' : '',
+                    isWormValid ? 'ring-1 ring-inset ring-white/25' : '',
+                  ].join(' ')}
                   style={{ background: color ?? '#0b1220' }}
                 >
                   {pu && (
@@ -177,6 +168,150 @@ export function PixelHeart({ state, send, isHost, myName }: GameComponentProps<P
           );
         })}
       </div>
+
+      {state.paintsUntilNextPowerup !== null && (
+        <p className="text-slate-500 text-xs text-center">
+          Next power-up in{' '}
+          <span className="text-amber-400 font-semibold">{state.paintsUntilNextPowerup}</span>{' '}
+          paint{state.paintsUntilNextPowerup !== 1 ? 's' : ''}
+        </p>
+      )}
+
+      {/* Admin drawer — presenter only */}
+      {isHost && (
+        <>
+          {showDrawer && (
+            <div
+              className="fixed inset-0 z-40 bg-black/30"
+              onClick={() => setShowDrawer(false)}
+            />
+          )}
+          <div
+            className={[
+              'fixed top-0 right-0 h-full z-50 w-72 bg-slate-900 border-l border-slate-700/60 shadow-2xl',
+              'flex flex-col overflow-y-auto transition-transform duration-200',
+              showDrawer ? 'translate-x-0' : 'translate-x-full',
+            ].join(' ')}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700/60 shrink-0">
+              <span className="text-white font-semibold text-sm">Canvas Settings</span>
+              <button
+                onClick={() => setShowDrawer(false)}
+                className="text-slate-400 hover:text-slate-200 text-lg leading-none transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-5 p-4 text-xs text-slate-300">
+              {/* Grid */}
+              <section className="flex flex-col gap-2">
+                <span className="text-slate-400 font-medium uppercase tracking-wider text-[10px]">Grid</span>
+                <CanvasGridControls config={config} onChange={(patch) => setConfig(patch)} />
+              </section>
+
+              {/* Paint */}
+              <section className="flex flex-col gap-3 border-t border-slate-700/50 pt-4">
+                <span className="text-slate-400 font-medium uppercase tracking-wider text-[10px]">Paint</span>
+                <label className="flex flex-col gap-1">
+                  <span>Mix strength: {config.mixStrength.toFixed(2)}</span>
+                  <input type="range" min={0.05} max={0.95} step={0.05} value={config.mixStrength}
+                    onChange={(e) => setConfig({ mixStrength: Number(e.target.value) })} />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span>Cooldown: {config.cooldownMs}ms</span>
+                  <input type="range" min={0} max={2000} step={50} value={config.cooldownMs}
+                    onChange={(e) => setConfig({ cooldownMs: Number(e.target.value) })} />
+                </label>
+              </section>
+
+              {/* Power-ups */}
+              <section className="flex flex-col gap-3 border-t border-slate-700/50 pt-4">
+                <span className="text-slate-400 font-medium uppercase tracking-wider text-[10px]">Power-ups</span>
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={config.powerupsEnabled}
+                    onChange={(e) => setConfig({ powerupsEnabled: e.target.checked })} />
+                  <span>Enabled</span>
+                </label>
+                {config.powerupsEnabled && (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <span className="shrink-0">Mode:</span>
+                      <button
+                        onClick={() => setConfig({ powerupMode: 'time' })}
+                        className={[
+                          'px-2 py-0.5 rounded text-xs border transition-colors',
+                          config.powerupMode === 'time'
+                            ? 'bg-indigo-600 border-indigo-500 text-white'
+                            : 'bg-slate-800 border-slate-600 text-slate-300 hover:border-slate-500',
+                        ].join(' ')}
+                      >
+                        Time
+                      </button>
+                      <button
+                        onClick={() => setConfig({ powerupMode: 'count' })}
+                        className={[
+                          'px-2 py-0.5 rounded text-xs border transition-colors',
+                          config.powerupMode === 'count'
+                            ? 'bg-indigo-600 border-indigo-500 text-white'
+                            : 'bg-slate-800 border-slate-600 text-slate-300 hover:border-slate-500',
+                        ].join(' ')}
+                      >
+                        Count
+                      </button>
+                    </div>
+                    {config.powerupMode === 'time' ? (
+                      <label className="flex flex-col gap-1">
+                        <span>Interval: {Math.round(config.powerupIntervalMs / 1000)}s</span>
+                        <input type="range" min={2} max={120} value={Math.round(config.powerupIntervalMs / 1000)}
+                          onChange={(e) => setConfig({ powerupIntervalMs: Number(e.target.value) * 1000 })} />
+                      </label>
+                    ) : (
+                      <label className="flex flex-col gap-1">
+                        <span>Paints per player: {config.powerupPaintsPerPlayer}</span>
+                        <input type="range" min={1} max={20} value={config.powerupPaintsPerPlayer}
+                          onChange={(e) => setConfig({ powerupPaintsPerPlayer: Number(e.target.value) })} />
+                        <span className="text-slate-500">
+                          Drop after {Math.max(1, players.length) * config.powerupPaintsPerPlayer} total paints
+                        </span>
+                      </label>
+                    )}
+                    <button
+                      onClick={handleDropPowerup}
+                      className="w-full py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-medium transition-colors"
+                    >
+                      Drop power-up now
+                    </button>
+                  </>
+                )}
+              </section>
+
+              {/* Rules */}
+              <section className="flex flex-col gap-3 border-t border-slate-700/50 pt-4">
+                <span className="text-slate-400 font-medium uppercase tracking-wider text-[10px]">Rules</span>
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input type="checkbox" className="mt-0.5" checked={config.wormMode}
+                    onChange={(e) => setConfig({ wormMode: e.target.checked })} />
+                  <span className="flex flex-col gap-0.5">
+                    <span>Worm mode</span>
+                    <span className="text-slate-500">Each paint must be adjacent to your last one</span>
+                  </span>
+                </label>
+              </section>
+
+              {/* Danger */}
+              <section className="border-t border-slate-700/50 pt-4">
+                <button
+                  onClick={() => { handleReset(); setShowDrawer(false); }}
+                  className="w-full py-1.5 rounded-lg bg-red-900/60 hover:bg-red-800/70 border border-red-700/50 text-red-300 text-xs transition-colors"
+                >
+                  Reset canvas
+                </button>
+              </section>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

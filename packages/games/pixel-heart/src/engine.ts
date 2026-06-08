@@ -53,6 +53,8 @@ function getConfig(ctx: GameContext): PaintConfig {
     const raw = ctx.meta.get(key);
     return raw === null ? fallback : raw === 'true';
   };
+  const powerupModeRaw = ctx.meta.get('paint_powerup_mode');
+  const powerupMode: PaintConfig['powerupMode'] = powerupModeRaw === 'count' ? 'count' : 'time';
   return {
     cols: num('paint_cols', DEFAULT_PAINT_CONFIG.cols),
     rows: num('paint_rows', DEFAULT_PAINT_CONFIG.rows),
@@ -62,6 +64,9 @@ function getConfig(ctx: GameContext): PaintConfig {
     powerupsEnabled: bool('paint_powerups_enabled', DEFAULT_PAINT_CONFIG.powerupsEnabled),
     powerupIntervalMs: num('paint_powerup_interval_ms', DEFAULT_PAINT_CONFIG.powerupIntervalMs),
     powerupMax: num('paint_powerup_max', DEFAULT_PAINT_CONFIG.powerupMax),
+    wormMode: bool('paint_worm_mode', DEFAULT_PAINT_CONFIG.wormMode),
+    powerupMode,
+    powerupPaintsPerPlayer: num('paint_powerup_paints_per_player', DEFAULT_PAINT_CONFIG.powerupPaintsPerPlayer),
   };
 }
 
@@ -214,14 +219,7 @@ function tryPickupPowerup(ctx: GameContext, player: Player, x: number, y: number
   }
 }
 
-function maybeSpawnPowerup(ctx: GameContext, cfg: PaintConfig, now: number): void {
-  if (!cfg.powerupsEnabled) return;
-  const active = [...ctx.sql.exec(`SELECT COUNT(*) as c FROM paint_powerups`)][0].c as number;
-  if (active >= cfg.powerupMax) return;
-  const lastRaw = ctx.meta.get('paint_last_spawn_ms');
-  const last = lastRaw ? Number(lastRaw) : 0;
-  if (now - last < cfg.powerupIntervalMs) return;
-
+function spawnPowerup(ctx: GameContext, cfg: PaintConfig, now: number): boolean {
   for (let attempt = 0; attempt < 12; attempt++) {
     const x = Math.floor(Math.random() * cfg.cols);
     const y = Math.floor(Math.random() * cfg.rows);
@@ -232,8 +230,27 @@ function maybeSpawnPowerup(ctx: GameContext, cfg: PaintConfig, now: number): voi
       `INSERT INTO paint_powerups (id, x, y, kind, spawned_ms) VALUES (?, ?, ?, ?, ?)`,
       crypto.randomUUID(), x, y, kind, now,
     );
-    ctx.meta.set('paint_last_spawn_ms', String(now));
-    return;
+    return true;
+  }
+  return false;
+}
+
+function maybeSpawnPowerup(ctx: GameContext, cfg: PaintConfig, now: number): void {
+  if (!cfg.powerupsEnabled) return;
+  const active = [...ctx.sql.exec(`SELECT COUNT(*) as c FROM paint_powerups`)][0].c as number;
+  if (active >= cfg.powerupMax) return;
+
+  if (cfg.powerupMode === 'count') {
+    const playerCount = ctx.players().length;
+    const needed = Math.max(1, playerCount) * cfg.powerupPaintsPerPlayer;
+    const paintsSince = Number(ctx.meta.get('paint_count_since_spawn') ?? 0);
+    if (paintsSince < needed) return;
+    if (spawnPowerup(ctx, cfg, now)) ctx.meta.set('paint_count_since_spawn', '0');
+  } else {
+    const lastRaw = ctx.meta.get('paint_last_spawn_ms');
+    const last = lastRaw ? Number(lastRaw) : 0;
+    if (now - last < cfg.powerupIntervalMs) return;
+    if (spawnPowerup(ctx, cfg, now)) ctx.meta.set('paint_last_spawn_ms', String(now));
   }
 }
 
@@ -241,6 +258,17 @@ function maybeSpawnPowerup(ctx: GameContext, cfg: PaintConfig, now: number): voi
 // responsible for cooldown gating and broadcasting.
 function applyPaint(ctx: GameContext, player: Player, x: number, y: number, cfg: PaintConfig, now: number): boolean {
   if (x < 0 || x >= cfg.cols || y < 0 || y >= cfg.rows) return false;
+
+  // Worm mode: each paint must be within Chebyshev distance 1 of the player's last paint.
+  if (cfg.wormMode) {
+    const lastRow = [...ctx.sql.exec(`SELECT x, y FROM paint_worm_last WHERE player_key = ?`, player.id)];
+    if (lastRow.length > 0) {
+      const dx = Math.abs(x - (lastRow[0].x as number));
+      const dy = Math.abs(y - (lastRow[0].y as number));
+      if (Math.max(dx, dy) > 1) return false;
+    }
+  }
+
   const playerRow = [...ctx.sql.exec(`SELECT color FROM players WHERE id = ?`, player.id)];
   if (playerRow.length === 0) return false;
 
@@ -270,7 +298,19 @@ function applyPaint(ctx: GameContext, player: Player, x: number, y: number, cfg:
   }
 
   if (effect) consumeEffectCharge(ctx, player.id, effect.charges);
+
+  // Update worm last-paint position.
+  ctx.sql.exec(
+    `INSERT OR REPLACE INTO paint_worm_last (player_key, x, y) VALUES (?, ?, ?)`,
+    player.id, x, y,
+  );
+
   tryPickupPowerup(ctx, player, x, y);
+
+  // Increment paint count (used by count-mode power-up spawning).
+  const paintsSince = Number(ctx.meta.get('paint_count_since_spawn') ?? 0);
+  ctx.meta.set('paint_count_since_spawn', String(paintsSince + 1));
+
   maybeSpawnPowerup(ctx, cfg, now);
   return true;
 }
@@ -340,7 +380,26 @@ function buildCanvasState(ctx: GameContext): CanvasState {
 
   const claims = [...ctx.sql.exec(`SELECT player_key FROM paint_powerup_claims`)].map((r) => r.player_key as string);
 
-  return { canvas, cols: cfg.cols, rows: cfg.rows, progress, harmony, players, powerups, effects, claims, config: cfg };
+  // Worm last-paint positions (always included; empty when worm mode is off).
+  const wormLastPaints: CanvasState['wormLastPaints'] = {};
+  for (const row of ctx.sql.exec(`SELECT player_key, x, y FROM paint_worm_last`)) {
+    wormLastPaints[row.player_key as string] = { x: row.x as number, y: row.y as number };
+  }
+
+  // Paints-until-next-powerup counter (count mode only).
+  let paintsUntilNextPowerup: number | null = null;
+  if (cfg.powerupsEnabled && cfg.powerupMode === 'count') {
+    const playerCount = ctx.players().length;
+    const needed = Math.max(1, playerCount) * cfg.powerupPaintsPerPlayer;
+    const paintsSince = Number(ctx.meta.get('paint_count_since_spawn') ?? 0);
+    paintsUntilNextPowerup = Math.max(0, needed - paintsSince);
+  }
+
+  return {
+    canvas, cols: cfg.cols, rows: cfg.rows, progress, harmony,
+    players, powerups, effects, claims, config: cfg,
+    wormLastPaints, paintsUntilNextPowerup,
+  };
 }
 
 function applyConfig(ctx: GameContext, partial: Record<string, unknown>): void {
@@ -355,11 +414,15 @@ function applyConfig(ctx: GameContext, partial: Record<string, unknown>): void {
   if ('powerupsEnabled' in partial) ctx.meta.set('paint_powerups_enabled', partial.powerupsEnabled ? 'true' : 'false');
   if ('powerupIntervalMs' in partial) ctx.meta.set('paint_powerup_interval_ms', String(clampInt(partial.powerupIntervalMs, 1000, 600_000, DEFAULT_PAINT_CONFIG.powerupIntervalMs)));
   if ('powerupMax' in partial) ctx.meta.set('paint_powerup_max', String(clampInt(partial.powerupMax, 0, 32, DEFAULT_PAINT_CONFIG.powerupMax)));
+  if ('wormMode' in partial) ctx.meta.set('paint_worm_mode', partial.wormMode ? 'true' : 'false');
+  if ('powerupMode' in partial) ctx.meta.set('paint_powerup_mode', partial.powerupMode === 'count' ? 'count' : 'time');
+  if ('powerupPaintsPerPlayer' in partial) ctx.meta.set('paint_powerup_paints_per_player', String(clampInt(partial.powerupPaintsPerPlayer, 1, 100, DEFAULT_PAINT_CONFIG.powerupPaintsPerPlayer)));
 
   // Drop anything that fell outside the (possibly shrunk) grid.
   const cfg = getConfig(ctx);
   ctx.sql.exec(`DELETE FROM paint_cells WHERE x >= ? OR y >= ?`, cfg.cols, cfg.rows);
   ctx.sql.exec(`DELETE FROM paint_powerups WHERE x >= ? OR y >= ?`, cfg.cols, cfg.rows);
+  ctx.sql.exec(`DELETE FROM paint_worm_last WHERE x >= ? OR y >= ?`, cfg.cols, cfg.rows);
 }
 
 function resetCanvas(ctx: GameContext): void {
@@ -368,12 +431,13 @@ function resetCanvas(ctx: GameContext): void {
   ctx.sql.exec(`DELETE FROM paint_powerup_claims`);
   ctx.sql.exec(`DELETE FROM paint_effects`);
   ctx.sql.exec(`DELETE FROM paint_cooldown`);
-  ctx.sql.exec(`DELETE FROM meta WHERE key = 'paint_last_spawn_ms'`);
+  ctx.sql.exec(`DELETE FROM paint_worm_last`);
+  ctx.sql.exec(`DELETE FROM meta WHERE key IN ('paint_last_spawn_ms', 'paint_count_since_spawn')`);
 }
 
 export const pixelHeartEngine: GameEngine<CanvasState> = {
   id: 'pixel-heart',
-  inboundTypes: ['GAME_PAINT', 'GAME_PAINT_PATH', 'GAME_CONFIG', 'GAME_RESET'],
+  inboundTypes: ['GAME_PAINT', 'GAME_PAINT_PATH', 'GAME_CONFIG', 'GAME_RESET', 'GAME_DROP_POWERUP'],
 
   initSchema(ctx) {
     ctx.sql.exec(`
@@ -394,6 +458,9 @@ export const pixelHeartEngine: GameEngine<CanvasState> = {
       );
       CREATE TABLE IF NOT EXISTS paint_cooldown (
         player_key TEXT PRIMARY KEY, last_ms INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS paint_worm_last (
+        player_key TEXT PRIMARY KEY, x INTEGER NOT NULL, y INTEGER NOT NULL
       );
     `);
   },
@@ -436,6 +503,18 @@ export const pixelHeartEngine: GameEngine<CanvasState> = {
 
     if (msg.type === 'GAME_RESET') {
       resetCanvas(ctx);
+      ctx.broadcast({ type: 'SYNC_CANVAS', ...buildCanvasState(ctx) });
+      return;
+    }
+
+    if (msg.type === 'GAME_DROP_POWERUP') {
+      const cfg = getConfig(ctx);
+      if (!cfg.powerupsEnabled) return;
+      const now = Date.now();
+      if (spawnPowerup(ctx, cfg, now)) {
+        ctx.meta.set('paint_last_spawn_ms', String(now));
+        ctx.meta.set('paint_count_since_spawn', '0');
+      }
       ctx.broadcast({ type: 'SYNC_CANVAS', ...buildCanvasState(ctx) });
     }
   },
