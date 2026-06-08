@@ -102,6 +102,11 @@ export function useWebSocket(url: string, disabled = false) {
       let msg: Record<string, unknown>;
       try { msg = JSON.parse(event.data as string) as Record<string, unknown>; } catch { return; }
 
+      if (msg.type === 'RELOAD') {
+        window.location.reload();
+        return;
+      }
+
       setState((prev) => {
         switch (msg.type) {
           case 'WELCOME':

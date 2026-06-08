@@ -156,6 +156,12 @@ export class PresentationRoom {
       return;
     }
 
+    if (msg.type === 'RELOAD_CLIENTS') {
+      if (role !== 'presenter') return;
+      this.broadcastReload();
+      return;
+    }
+
     if (msg.type === 'SUBMIT_VOTE') {
       await this.handleVote(participantId, msg);
       return;
@@ -409,6 +415,16 @@ export class PresentationRoom {
   private broadcast(msg: OutboundMsg): void {
     const text = JSON.stringify(msg);
     for (const ws of this.ctx.getWebSockets()) {
+      try { ws.send(text); } catch { /* ignore closed sockets */ }
+    }
+  }
+
+  /** Tell participant clients to reload (e.g. to pick up newly deployed assets). Skips presenters. */
+  private broadcastReload(): void {
+    const text = JSON.stringify({ type: 'RELOAD' } satisfies OutboundMsg);
+    for (const ws of this.ctx.getWebSockets()) {
+      const att = ws.deserializeAttachment() as RoomAttachment;
+      if (att.role === 'presenter') continue;
       try { ws.send(text); } catch { /* ignore closed sockets */ }
     }
   }

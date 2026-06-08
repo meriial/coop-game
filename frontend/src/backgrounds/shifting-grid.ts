@@ -109,11 +109,13 @@ const ripple: BackgroundStrategy = {
 // ── background ───────────────────────────────────────────────────────────────
 
 const sharedParams: ParamSpec[] = [
-  { kind: 'number', key: 'cellSize', label: 'Cell size', min: 12, max: 80, step: 2, default: 40 },
+  { kind: 'number', key: 'cellSize', label: 'Cell size', min: 12, max: 240, step: 2, default: 40 },
   { kind: 'color', key: 'baseColor', label: 'Base colour', default: '#020617' },
   { kind: 'color', key: 'tintColor', label: 'Tint colour', default: '#15244f' },
   { kind: 'number', key: 'intensity', label: 'Intensity', min: 0, max: 0.6, step: 0.01, default: 0.2 },
   { kind: 'number', key: 'speed', label: 'Speed', min: 0.05, max: 2, step: 0.05, default: 0.4 },
+  { kind: 'number', key: 'borderWidth', label: 'Border width', min: 0, max: 8, step: 1, default: 1 },
+  { kind: 'color', key: 'borderColor', label: 'Border colour', default: '#020617' },
 ];
 
 export const shiftingGrid: Background = {
@@ -130,15 +132,22 @@ export const shiftingGrid: Background = {
     const speed = num(params, 'speed', 0.4);
     const base = hexToRgb(str(params, 'baseColor', '#020617'));
     const tint = hexToRgb(str(params, 'tintColor', '#0b1030'));
+    // Border is static — it never varies with the strategy. It's painted as a
+    // full-canvas fill that shows through the gaps between inset cells.
+    const border = Math.max(0, Math.min(Math.floor(cell / 2), Math.round(num(params, 'borderWidth', 1))));
+    const borderRgb = hexToRgb(str(params, 'borderColor', '#020617'));
 
     const strategy =
       this.strategies.find((s) => s.id === frame.strategyId) ?? this.strategies[0];
     const fc: FieldContext = { width, height, t: frame.t * speed, cols, rows, params };
 
-    // Base fill first so partial cells at the edges stay on-palette.
-    ctx.fillStyle = `rgb(${base.r},${base.g},${base.b})`;
+    // Fill the whole canvas: with no border this is the base colour; with a
+    // border it's the border colour, which the inset cells reveal as grid lines.
+    const bg = border > 0 ? borderRgb : base;
+    ctx.fillStyle = `rgb(${bg.r},${bg.g},${bg.b})`;
     ctx.fillRect(0, 0, width, height);
 
+    const inner = cell - border; // cell size minus the top/left grid line
     for (let cy = 0; cy < rows; cy++) {
       for (let cx = 0; cx < cols; cx++) {
         const v = strategy.field(cx, cy, fc); // 0..1
@@ -147,7 +156,7 @@ export const shiftingGrid: Background = {
         const g = Math.round(lerp(base.g, tint.g, mix));
         const b = Math.round(lerp(base.b, tint.b, mix));
         ctx.fillStyle = `rgb(${r},${g},${b})`;
-        ctx.fillRect(cx * cell, cy * cell, cell, cell);
+        ctx.fillRect(cx * cell + border, cy * cell + border, inner, inner);
       }
     }
   },

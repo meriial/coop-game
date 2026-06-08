@@ -95,6 +95,12 @@ export function PresenterApp({ state, send, myName, myOwner, token, onToggleDevR
   const setParam = (key: string, value: number | string | boolean) =>
     sendBg({ ...bgConfig, params: { ...bgConfig.params, [key]: value } });
 
+  const reloadParticipants = () => {
+    if (!window.confirm('Reload all participant browsers? (Presenters are not reloaded.)')) return;
+    send({ type: 'RELOAD_CLIENTS' });
+    setSettingsMenuOpen(false);
+  };
+
   useEffect(() => {
     if (isGame) return; // disable global keys during game
     const handler = (e: KeyboardEvent) => {
@@ -205,6 +211,12 @@ export function PresenterApp({ state, send, myName, myOwner, token, onToggleDevR
             className="w-full text-left px-3 py-2 text-sm text-slate-300 hover:bg-slate-800/60 transition-colors"
           >
             Background
+          </button>
+          <button
+            onClick={reloadParticipants}
+            className="w-full text-left px-3 py-2 text-sm text-slate-300 hover:bg-slate-800/60 transition-colors"
+          >
+            Reload participants
           </button>
         </div>
       </div>

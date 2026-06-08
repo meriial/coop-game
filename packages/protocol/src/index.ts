@@ -159,12 +159,14 @@ export type InboundMsg =
   | { type: 'MATCH_SET_TIMEOUT'; seconds: number }
   | { type: 'MATCH_SET_CATCHUP'; enabled: boolean }
   | { type: 'MATCH_SET_SHOW_COOLDOWN'; enabled: boolean }
-  | { type: 'BG_CONFIG'; config: BgConfig };
+  | { type: 'BG_CONFIG'; config: BgConfig }
+  | { type: 'RELOAD_CLIENTS' };
 
 export type OutboundMsg =
   | ({ type: 'WELCOME'; stepIndex: number; role: string; pollResults: Record<string, Record<string, number>>; pollValues: Record<string, string[]>; bgConfig: BgConfig | null } & CanvasState & MatchState)
   | { type: 'SYNC_STEP'; stepIndex: number }
   | { type: 'SYNC_BG'; config: BgConfig }
+  | { type: 'RELOAD' }
   | { type: 'POLL_UPDATES'; pollId: string; results?: Record<string, number>; values?: string[] }
   | { type: 'POLL_RESET'; pollId: string }
   | ({ type: 'SYNC_CANVAS' } & CanvasState)
