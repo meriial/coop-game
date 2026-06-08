@@ -72,6 +72,8 @@ const sharedParams: ParamSpec[] = [
   { kind: 'number', key: 'maxAlpha', label: 'Max brightness', min: 0.05, max: 1, step: 0.05, default: 0.7 },
   { kind: 'number', key: 'frequency', label: 'Frequency /s', min: 0.2, max: 20, step: 0.2, default: 4 },
   { kind: 'number', key: 'lifespan', label: 'Lifespan (s)', min: 0.2, max: 6, step: 0.1, default: 1.2 },
+  { kind: 'number', key: 'jitterAmount', label: 'Timing jitter', min: 0, max: 1, step: 0.05, default: 0 },
+  { kind: 'number', key: 'jitterRange', label: 'Jitter range (s)', min: 1, max: 10, step: 0.5, default: 3 },
 ];
 
 // Linear-congruential hash: maps a slot index to a stable pseudo-random 32-bit value.
@@ -95,6 +97,9 @@ export const sparkles: Background = {
     const maxAlpha = num(params, 'maxAlpha', 0.7);
     const frequency = Math.max(0.1, num(params, 'frequency', 4));
     const lifespan = Math.max(0.1, num(params, 'lifespan', 1.2));
+    const jitterAmount = Math.min(1, Math.max(0, num(params, 'jitterAmount', 0)));
+    const jitterRange = Math.min(10, Math.max(0, num(params, 'jitterRange', 3)));
+    const maxJitter = jitterAmount * jitterRange;
     const spawnInterval = 1 / frequency;
 
     ctx.fillStyle = `rgb(${base.r},${base.g},${base.b})`;
@@ -103,13 +108,15 @@ export const sparkles: Background = {
     const strategy = this.strategies.find((s) => s.id === frame.strategyId) ?? this.strategies[0];
     const fc: FieldContext = { width, height, t, cols, rows, params };
 
-    // Each "slot" i spawns one sparkle at time i * spawnInterval. We look back
-    // far enough to cover any sparkle still within its lifespan.
+    // Each slot i spawns at i*spawnInterval + per-slot jitter offset. We scan
+    // all slots whose jittered spawn time could fall within [t-lifespan, t].
     const currentSlot = Math.floor(t / spawnInterval);
-    const lookback = Math.ceil(lifespan / spawnInterval) + 1;
+    const minI = Math.max(0, Math.floor((t - lifespan - maxJitter) / spawnInterval));
 
-    for (let i = Math.max(0, currentSlot - lookback); i <= currentSlot; i++) {
-      const age = t - i * spawnInterval;
+    for (let i = minI; i <= currentSlot; i++) {
+      // Deterministic jitter: use a second hash seed so position and timing are independent.
+      const jitter = maxJitter * (slotHash(i ^ 0x9E3779B9) / 0xFFFFFFFF);
+      const age = t - (i * spawnInterval + jitter);
       if (age < 0 || age > lifespan) continue;
 
       const phase = age / lifespan; // 0..1
