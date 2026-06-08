@@ -225,7 +225,7 @@ async function main() {
 
   server.tool(
     'get_config',
-    'Co-op canvas rules: grid size, mix strength, paint cooldown, agent batch size, and the available power-up blend modes.',
+    'Co-op canvas rules: grid size, mix strength, paint cooldown, and the available power-up blend modes.',
     {},
     async () => {
       const cfg = client.getSnapshot().pixelHeart.config;
@@ -236,7 +236,6 @@ async function main() {
             grid: { cols: cfg.cols, rows: cfg.rows },
             mixStrength: cfg.mixStrength,
             cooldownMs: cfg.cooldownMs,
-            agentBatchMax: cfg.agentBatchMax,
             powerups: {
               enabled: cfg.powerupsEnabled,
               intervalMs: cfg.powerupIntervalMs,
@@ -247,7 +246,7 @@ async function main() {
               'Painting a cell fills it with your color; the 8 neighbours blend toward your color (empty neighbours become half-transparent).',
               'Repeated paints accumulate, building gradients where colors meet.',
               'Painting onto a power-up cell grants its blend-mode effect for a few paints. You cannot grab another until everyone else has claimed one.',
-              `Paints are rate-limited to one per ${cfg.cooldownMs}ms; use paint_path to lay down up to ${cfg.agentBatchMax} cells per turn.`,
+              `Paints are rate-limited to one per ${cfg.cooldownMs}ms.`,
             ],
           }, null, 2),
         }],
@@ -264,19 +263,6 @@ async function main() {
       const snapshot = await client.waitForUpdate(client.getSnapshot().version, 10_000);
       return {
         content: [{ type: 'text', text: JSON.stringify({ sent: { type: 'GAME_PAINT', x, y }, state: pixelHeartView(snapshot), version: snapshot.version }, null, 2) }],
-      };
-    },
-  );
-
-  server.tool(
-    'paint_path',
-    'Paint multiple cells in one turn (capped at the agent batch size). Useful for drawing lines, shapes, or gradients.',
-    { cells: z.array(z.object({ x: z.number(), y: z.number() })) },
-    async ({ cells }) => {
-      client.sendAction({ type: 'GAME_PAINT_PATH', cells });
-      const snapshot = await client.waitForUpdate(client.getSnapshot().version, 10_000);
-      return {
-        content: [{ type: 'text', text: JSON.stringify({ sent: { type: 'GAME_PAINT_PATH', count: cells.length }, state: pixelHeartView(snapshot), version: snapshot.version }, null, 2) }],
       };
     },
   );

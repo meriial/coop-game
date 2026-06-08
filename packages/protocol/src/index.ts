@@ -60,7 +60,7 @@ export const DEFAULT_PAINT_CONFIG: PaintConfig = {
   cols: 32,
   rows: 18,
   mixStrength: 0.5,
-  cooldownMs: 150,
+  cooldownMs: 500,
   agentBatchMax: 8,
   powerupsEnabled: true,
   powerupIntervalMs: 12_000,
