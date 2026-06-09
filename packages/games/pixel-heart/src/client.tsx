@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { GameComponentProps } from '@workshop/game-core/client';
 import type { PowerUpKind } from '@workshop/protocol';
 import type { PixelHeartState } from './types';
@@ -398,21 +399,24 @@ export function PixelHeart({ state, send, isHost, myName, myOwner }: GameCompone
         </div>
       )}
 
-      {/* Admin drawer */}
-      {isHost && (
+      {/* Admin drawer — rendered via portal so it escapes the isolate stacking context
+          and appears above the presenter control bar (z-[100]). */}
+      {isHost && createPortal(
         <>
           {showDrawer && (
             <div
-              className="fixed inset-0 z-40 bg-black/30"
+              className="fixed inset-0 bg-black/30"
+              style={{ zIndex: 190 }}
               onClick={() => setShowDrawer(false)}
             />
           )}
           <div
             className={[
-              'fixed top-0 right-0 h-full z-50 w-80 bg-slate-900 border-l border-slate-700/60 shadow-2xl',
+              'fixed top-0 right-0 h-full w-80 bg-slate-900 border-l border-slate-700/60 shadow-2xl',
               'flex flex-col overflow-y-auto transition-transform duration-200',
               showDrawer ? 'translate-x-0' : 'translate-x-full',
             ].join(' ')}
+            style={{ zIndex: 200 }}
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700/60 shrink-0">
               <span className="text-white font-semibold text-sm">Canvas Settings</span>
@@ -659,7 +663,8 @@ export function PixelHeart({ state, send, isHost, myName, myOwner }: GameCompone
               </section>
             </div>
           </div>
-        </>
+        </>,
+        document.body,
       )}
     </div>
   );
