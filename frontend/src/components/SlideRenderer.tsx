@@ -314,6 +314,16 @@ function Capability() {
   );
 }
 
+function QualityQuestions() {
+  return (
+    <Slide bg="dot" accent="indigo">
+      <Stack gap="lg" align="center">
+        <H1>Quality Questions</H1>
+      </Stack>
+    </Slide>
+  );
+}
+
 function Slide1() {
   return (
     <Slide bg="line" accent="indigo">

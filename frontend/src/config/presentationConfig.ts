@@ -106,5 +106,6 @@ export const presentationSteps: PresentationStep[] = [
   { type: "slide", slideIndex: 19 },
   { type: "slide", slideIndex: 20 },
   { type: "slide", slideIndex: 21 },
+  { type: "slide", slideIndex: 22 },
   { type: "game", gameId: "pixel-heart" },
 ];
