@@ -55,6 +55,7 @@ const slides = [
   <MagicPromptGetItRight />,
   <Quality />,
   <Capability />,
+  <QualityQuestions />,
 ];
 
 export function SlideRenderer({ index }: Props) {
