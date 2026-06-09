@@ -25,13 +25,37 @@ import {
   BulletListItem,
   IconGrid,
   IconGridItem,
+  H2,
 } from "./slide-kit";
 
 interface Props {
   index: number;
 }
 
-const slides = [<Slide0 />, <Slide1 />, <Slide2 />, <Slide3 />];
+const slides = [
+  <Why />,
+  <MoreWandLessWizard />,
+  <PrinciplesAndPatterns />,
+  <AlwaysBePrompting />,
+  <WhatsGoodForAHuman />,
+  <BeDeterministic />,
+  <InvestInThingsThatCompound />,
+  <MoveAsMuchAsYouCan />,
+  <LearnAsMuchAsYouCan />,
+  <ThreeAgentModel />,
+  <ConnectAsMuchAsYouCan />,
+  <TheEndOfTheIC />,
+  <Collaboration />,
+  <Curiosity />,
+  <Empathy />,
+  <MagicPromptKeepGoing />,
+  <MagicPromptNowMakeItPass />,
+  <MagicPromptTeachMe />,
+  <MagicPromptUseFewerTokens />,
+  <MagicPromptGetItRight />,
+  <Quality />,
+  <Capability />,
+];
 
 export function SlideRenderer({ index }: Props) {
   return (
@@ -43,7 +67,17 @@ export function SlideRenderer({ index }: Props) {
   );
 }
 
-function Slide0() {
+function Why() {
+  return (
+    <Slide bg="dot" accent="indigo">
+      <Stack gap="lg" align="center">
+        <H1>Why?</H1>
+      </Stack>
+    </Slide>
+  );
+}
+
+function MoreWandLessWizard() {
   return (
     <Slide bg="dot" accent="indigo">
       <Stack gap="lg" align="center">
@@ -52,11 +86,229 @@ function Slide0() {
           <br />
           More Wizard
         </H1>
-        <TagRow>
-          <Tag>Collaboration</Tag>
-          <Tag accent="pink">Capability</Tag>
-          <Tag accent="emerald">Quality</Tag>
-        </TagRow>
+      </Stack>
+    </Slide>
+  );
+}
+
+function PrinciplesAndPatterns() {
+  return (
+    <Slide bg="dot" accent="indigo">
+      <Stack gap="lg" align="center">
+        <H1>Principles and Patterns</H1>
+      </Stack>
+    </Slide>
+  );
+}
+
+function AlwaysBePrompting() {
+  return (
+    <Slide bg="dot" accent="indigo">
+      <Stack gap="lg" align="center">
+        <H1>#always-be-prompting</H1>
+      </Stack>
+    </Slide>
+  );
+}
+
+function WhatsGoodForAHuman() {
+  return (
+    <Slide bg="dot" accent="indigo">
+      <Stack gap="lg" align="center">
+        <H2>
+          What's good for a human
+          <br />
+          is good for an agent
+          <br />
+          (and vice versa)
+        </H2>
+      </Stack>
+    </Slide>
+  );
+}
+
+function BeDeterministic() {
+  return (
+    <Slide bg="dot" accent="indigo">
+      <Stack gap="lg" align="center">
+        <H2>
+          Don't use an agent
+          <br /> to do a calculator's job
+        </H2>
+      </Stack>
+    </Slide>
+  );
+}
+
+function InvestInThingsThatCompound() {
+  return (
+    <Slide bg="dot" accent="indigo">
+      <Stack gap="lg" align="center">
+        <H1>
+          Invest in things
+          <br /> that compound
+        </H1>
+      </Stack>
+    </Slide>
+  );
+}
+
+function LearnAsMuchAsYouCan() {
+  return (
+    <Slide bg="dot" accent="indigo">
+      <Stack gap="lg" align="center">
+        <H1>Learn</H1>
+        <Subtext>as much as you can</Subtext>
+      </Stack>
+    </Slide>
+  );
+}
+
+function ConnectAsMuchAsYouCan() {
+  return (
+    <Slide bg="dot" accent="indigo">
+      <Stack gap="lg" align="center">
+        <H1>Connect</H1>
+        <Subtext>as much as you can</Subtext>
+      </Stack>
+    </Slide>
+  );
+}
+
+function MoveAsMuchAsYouCan() {
+  return (
+    <Slide bg="dot" accent="indigo">
+      <Stack gap="lg" align="center">
+        <H1>Move</H1>
+        <Subtext>as much as you can</Subtext>
+      </Stack>
+    </Slide>
+  );
+}
+
+function MagicPromptKeepGoing() {
+  return (
+    <Slide bg="dot" accent="indigo">
+      <Stack gap="lg" align="center">
+        <Subtext>Magic Prompt</Subtext>
+        <H1>Keep Going</H1>
+      </Stack>
+    </Slide>
+  );
+}
+
+function MagicPromptNowMakeItPass() {
+  return (
+    <Slide bg="dot" accent="indigo">
+      <Stack gap="lg" align="center">
+        <Subtext>Magic Prompt</Subtext>
+        <H1>Now Make It Pass</H1>
+      </Stack>
+    </Slide>
+  );
+}
+
+function MagicPromptTeachMe() {
+  return (
+    <Slide bg="dot" accent="indigo">
+      <Stack gap="lg" align="center">
+        <Subtext>Magic Prompt</Subtext>
+        <H1>Teach Me</H1>
+      </Stack>
+    </Slide>
+  );
+}
+
+function MagicPromptUseFewerTokens() {
+  return (
+    <Slide bg="dot" accent="indigo">
+      <Stack gap="lg" align="center">
+        <Subtext>Magic Prompt</Subtext>
+        <H1>Use Fewer Tokens</H1>
+      </Stack>
+    </Slide>
+  );
+}
+
+function MagicPromptGetItRight() {
+  return (
+    <Slide bg="dot" accent="indigo">
+      <Stack gap="lg" align="center">
+        <Subtext>Magic Prompt</Subtext>
+        <H1>Get It Right</H1>
+        <Subtext>the first time</Subtext>
+      </Stack>
+    </Slide>
+  );
+}
+
+function ThreeAgentModel() {
+  return (
+    <Slide bg="dot" accent="indigo">
+      <Stack gap="lg" align="center">
+        <H1>The Three Agent Model</H1>
+      </Stack>
+    </Slide>
+  );
+}
+
+function TheEndOfTheIC() {
+  return (
+    <Slide bg="dot" accent="indigo">
+      <Stack gap="lg" align="center">
+        <H1>The End of the IC</H1>
+      </Stack>
+    </Slide>
+  );
+}
+
+function Collaboration() {
+  return (
+    <Slide bg="dot" accent="indigo">
+      <Stack gap="lg" align="center">
+        <Subtext>The two skills of</Subtext>
+        <H1>Collaboration</H1>
+      </Stack>
+    </Slide>
+  );
+}
+
+function Curiosity() {
+  return (
+    <Slide bg="dot" accent="indigo">
+      <Stack gap="lg" align="center">
+        <H1>1. Curiosity</H1>
+      </Stack>
+    </Slide>
+  );
+}
+
+function Empathy() {
+  return (
+    <Slide bg="dot" accent="indigo">
+      <Stack gap="lg" align="center">
+        <H1>2. Empathy</H1>
+      </Stack>
+    </Slide>
+  );
+}
+
+function Quality() {
+  return (
+    <Slide bg="dot" accent="indigo">
+      <Stack gap="lg" align="center">
+        <H1>Quality Matters</H1>
+      </Stack>
+    </Slide>
+  );
+}
+
+function Capability() {
+  return (
+    <Slide bg="dot" accent="indigo">
+      <Stack gap="lg" align="center">
+        <H1>Quality Thinking</H1>
+        <H1>Quality Connection</H1>
       </Stack>
     </Slide>
   );

@@ -95,7 +95,7 @@ function parseRoomDomains(raw?: string): Map<string, string> {
 
 function resolveRoomForEmail(email: string, env: Env): string {
   const domain = email.split('@')[1]?.toLowerCase() ?? '';
-  return parseRoomDomains(env.ROOM_DOMAINS).get(domain) ?? 'main';
+  return parseRoomDomains(env.ROOM_DOMAINS).get(domain) ?? 'welcome';
 }
 
 function titleCase(word: string): string {
@@ -318,7 +318,7 @@ async function handleAuthVerify(request: Request, env: Env): Promise<Response> {
   const now = Math.floor(Date.now() / 1000);
   const room = resolveRoomForEmail(email, env);
   const agentToken = await createJWT(
-    { email, name, iat: now, exp: now + 604800, ...(room !== 'main' ? { room } : {}) },
+    { email, name, iat: now, exp: now + 604800, room },
     env.JWT_SECRET
   );
 
@@ -365,7 +365,7 @@ async function handleGuestInvite(request: Request, env: Env): Promise<Response> 
   const now = Math.floor(Date.now() / 1000);
   const room = body.room?.trim() || resolveRoomForEmail(guestEmail, env);
   const guestToken = await createJWT(
-    { email: guestEmail, name: guestName, iat: now, exp: now + 604800, ...(room !== 'main' ? { room } : {}) },
+    { email: guestEmail, name: guestName, iat: now, exp: now + 604800, room },
     env.JWT_SECRET
   );
 

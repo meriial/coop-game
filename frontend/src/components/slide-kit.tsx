@@ -76,7 +76,11 @@ function bgStyle(bg: Bg, accent: Accent): React.CSSProperties {
   };
 }
 
-const gapClass: Record<Gap, string> = { sm: "gap-4", md: "gap-8", lg: "gap-10" };
+const gapClass: Record<Gap, string> = {
+  sm: "gap-4",
+  md: "gap-8",
+  lg: "gap-10",
+};
 
 // ── Root ────────────────────────────────────────────────────────────────────
 
@@ -158,7 +162,7 @@ export function Label({ children }: { children: React.ReactNode }) {
 }
 
 export function Subtext({ children }: { children: React.ReactNode }) {
-  return <p className="text-2xl text-slate-400">{children}</p>;
+  return <p className="text-6xl text-slate-400">{children}</p>;
 }
 
 // Label + H2 combined header block for content slides
@@ -252,9 +256,7 @@ export function BulletListItem({
 }
 
 export function IconGrid({ children }: { children: React.ReactNode }) {
-  return (
-    <ul className="grid grid-cols-2 gap-4">{withListIndex(children)}</ul>
-  );
+  return <ul className="grid grid-cols-2 gap-4">{withListIndex(children)}</ul>;
 }
 
 export function IconGridItem({

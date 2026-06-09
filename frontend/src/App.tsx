@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useWebSocket } from './hooks/useWebSocket';
 import { PresenterApp } from './PresenterApp';
 import { ParticipantApp } from './ParticipantApp';
+import { WelcomeRoom } from './WelcomeRoom';
 import { TOKEN_KEY, decodeJwtName, decodeJwtEmail, decodeJwtRoom, isJwtExpired } from './jwt';
 
 const WS_BASE = (import.meta.env.VITE_WS_URL as string | undefined) ||
@@ -93,6 +94,10 @@ export function App() {
 
   if (!token) {
     return <NotAuthenticated />;
+  }
+
+  if (room === 'welcome') {
+    return <WelcomeRoom name={myName} />;
   }
 
   if (!state.connected) {
