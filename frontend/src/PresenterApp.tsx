@@ -114,7 +114,7 @@ export function PresenterApp({ state, send, myName, myOwner, token, onToggleDevR
   return (
     <div className="w-screen h-screen bg-slate-950 overflow-hidden relative flex flex-col">
       {/* Main stage */}
-      <div className="flex-1 overflow-hidden relative isolate flex flex-col">
+      <div className="flex-1 overflow-hidden relative isolate z-[110] flex flex-col">
         <SlideBackground config={state.bgConfig} />
         {/* Top chrome strip — transparent, reserves vertical space so stage content never collides with the user pill. */}
         <div className="relative z-50 flex items-center justify-end gap-2 h-11 px-4 shrink-0">
