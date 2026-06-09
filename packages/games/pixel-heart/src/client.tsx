@@ -424,7 +424,7 @@ export function PixelHeart({ state, send, isHost, myName, myOwner }: GameCompone
               </button>
             </div>
 
-            <div className="flex flex-col gap-5 p-4 text-xs text-slate-300">
+            <div className="flex flex-col gap-5 p-4 pb-[max(2rem,env(safe-area-inset-bottom))] text-xs text-slate-300">
               {/* Grid */}
               <section className="flex flex-col gap-2">
                 <span className="text-slate-400 font-medium uppercase tracking-wider text-[10px]">Grid</span>
