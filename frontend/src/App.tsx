@@ -4,7 +4,6 @@ import { PresenterApp } from './PresenterApp';
 import { ParticipantApp } from './ParticipantApp';
 import { WelcomeRoom } from './WelcomeRoom';
 import { TOKEN_KEY, decodeJwtName, decodeJwtEmail, decodeJwtRoom, isJwtExpired } from './jwt';
-
 const WS_BASE = (import.meta.env.VITE_WS_URL as string | undefined) ||
   `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`;
 
