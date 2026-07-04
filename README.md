@@ -2,7 +2,7 @@
 
 An interactive presentation platform for AI workshops. The presenter drives a slide deck with live polls; participants play real-time games together (periodic-table matching and a cooperative paint canvas with color mixing and power-ups). AI agents can join via an MCP bridge.
 
-**Docs:** [architecture](docs/architecture.md) · [games](docs/game.md) · **[local verification](docs/verification.md)**
+**Docs:** [architecture](docs/architecture.md) · [presentations](docs/presentations.md) · [games](docs/game.md) · **[local verification](docs/verification.md)**
 
 ---
 

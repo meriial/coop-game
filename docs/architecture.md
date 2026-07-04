@@ -85,11 +85,44 @@ interface GameEngine<State = unknown> {
 
 ### Adding a new game
 
-1. Create `packages/games/my-game/` with `engine`, `client`, `types`.
-2. Register the engine in `server/src/game-registry.ts`.
-3. Register the client in `frontend/src/games/register.ts`.
-4. Add a `{ type: 'game', gameId: 'my-game' }` step in `frontend/src/config/presentationConfig.ts`.
-5. Add BDD scenarios in `server/test/` that exercise the new message types at the WebSocket boundary.
+1. **Add state types to the protocol.** Open `packages/protocol/src/index.ts` and export your game's state interface (e.g. `MyGameState`). Both engine and client import from here — this is the single source of truth for wire types.
+
+2. **Create the game package.** Scaffold `packages/games/my-game/` with three files and a `package.json`:
+
+   ```
+   packages/games/my-game/
+     src/
+       engine.ts   — exports a GameEngine object
+       client.tsx  — exports a React GameComponent
+       types.ts    — re-exports MyGameState from @workshop/protocol
+     package.json  — three exports: ./engine, ./client, ./types
+   ```
+
+   See `packages/games/periodic-match/` for a complete example.
+
+3. **Register the engine (server).** In `server/src/game-registry.ts`:
+   ```typescript
+   import { myGameEngine } from '@workshop/game-my-game/engine';
+   gameRegistry.register(myGameEngine);
+   ```
+
+4. **Register the client (frontend).** In `frontend/src/games/register.ts`, add an empty-state constant and register:
+   ```typescript
+   import { MyGame } from '@workshop/game-my-game/client';
+   import type { MyGameState } from '@workshop/game-my-game/types';
+
+   const EMPTY_MY_GAME: MyGameState = { /* zero/default values */ };
+
+   clientGameRegistry.register<MyGameState>({
+     id: 'my-game',
+     Component: MyGame,
+     selectState: (games) => (games['my-game'] as MyGameState | undefined) ?? EMPTY_MY_GAME,
+   });
+   ```
+
+5. **Add the step.** In `frontend/src/config/presentationConfig.ts`, add `{ type: 'game', gameId: 'my-game' }` to `presentationSteps` at the position you want it. If your game plays audio, also add `step.gameId === 'my-game'` to the `stepHasSound` function so the presenter sees the audio warning.
+
+6. **Add BDD scenarios.** Write tests in `server/test/` that exercise the new message types at the WebSocket boundary.
 
 ## WebSocket protocol (presentation room)
 
