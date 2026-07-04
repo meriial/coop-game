@@ -2,6 +2,7 @@ import { GameRoom } from './game-room';
 import { PresentationRoom } from './PresentationRoom';
 
 interface Env {
+  ASSETS: Fetcher;
   GAME_ROOM: DurableObjectNamespace;
   PRESENTATION_ROOM: DurableObjectNamespace;
   AUTH_KV: KVNamespace;
@@ -390,6 +391,21 @@ async function handleGuestInvite(request: Request, env: Env): Promise<Response> 
   return Response.json(responseBody, { status: 200, headers: CORS });
 }
 
+// --- Victoria Guest Join ---
+
+const VICTORIA_ADJECTIVES = ['Royal', 'Bold', 'Swift', 'Golden', 'Loyal', 'Noble', 'Gilded', 'Proud', 'Grand', 'Regal'];
+const VICTORIA_NOUNS = ['Quill', 'Press', 'Seal', 'Stamp', 'Gazette', 'Scroll', 'Crest', 'Ledger', 'Courier', 'Herald'];
+
+async function handleVictoriaJoin(env: Env): Promise<Response> {
+  const adj = VICTORIA_ADJECTIVES[Math.floor(Math.random() * VICTORIA_ADJECTIVES.length)];
+  const noun = VICTORIA_NOUNS[Math.floor(Math.random() * VICTORIA_NOUNS.length)];
+  const name = `${adj} ${noun}`;
+  const guestEmail = `guest-${crypto.randomUUID()}@victoria.local`;
+  const exp = Math.floor(Date.now() / 1000) + 6 * 3600; // 6 hours
+  const token = await createJWT({ email: guestEmail, name, room: 'victoria', exp }, env.JWT_SECRET);
+  return Response.json({ token, name }, { headers: CORS });
+}
+
 // --- Main Handler ---
 
 export default {
@@ -439,6 +455,8 @@ export default {
       return env.PRESENTATION_ROOM.get(id).fetch(newReq);
     }
 
+    if (pathname === '/victoria-join' && method === 'GET') return handleVictoriaJoin(env);
+
     if (pathname === '/auth/config' && method === 'GET') return handleAuthConfig(env);
     if (pathname === '/auth/request' && method === 'POST') return handleAuthRequest(request, env);
     if (pathname === '/auth/poll' && method === 'GET') return handleAuthPoll(request, env);
@@ -446,10 +464,10 @@ export default {
     if (pathname === '/auth/inbox' && method === 'GET') return handleAuthInbox(env);
     if (pathname === '/auth/guest-invite' && method === 'POST') return handleGuestInvite(request, env);
 
-    return new Response(
-      JSON.stringify({ status: 'ok', game: 'Workshop Pixel Art', ws: '/ws' }),
-      { headers: { ...CORS, 'Content-Type': 'application/json' } }
-    );
+    // Serve index.html for all SPA routes (rewrite path to / for asset lookup)
+    const spaUrl = new URL(request.url);
+    spaUrl.pathname = '/';
+    return env.ASSETS.fetch(new Request(spaUrl.toString(), request));
   },
 } satisfies ExportedHandler<Env>;
 

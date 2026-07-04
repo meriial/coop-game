@@ -1,9 +1,11 @@
 import { clientGameRegistry } from '@workshop/game-core/client';
-import { emptyCanvasState } from '@workshop/protocol';
+import { emptyCanvasState, DEFAULT_KP_STATE } from '@workshop/protocol';
 import { PeriodicMatch } from '@workshop/game-periodic-match/client';
 import type { PeriodicMatchState } from '@workshop/game-periodic-match/types';
 import { PixelHeart } from '@workshop/game-pixel-heart/client';
 import type { PixelHeartState } from '@workshop/game-pixel-heart/types';
+import { KingsPrinterGame } from '@workshop/game-kings-printer/client';
+import type { KPState } from '@workshop/game-kings-printer/types';
 
 const EMPTY_MATCH: PeriodicMatchState = {
   matchBoard: [],
@@ -32,4 +34,10 @@ clientGameRegistry.register<PixelHeartState>({
   Component: PixelHeart,
   selectState: (games) =>
     (games['pixel-heart'] as PixelHeartState | undefined) ?? emptyCanvasState(),
+});
+
+clientGameRegistry.register<KPState>({
+  id: 'kings-printer',
+  Component: KingsPrinterGame,
+  selectState: (games) => (games['kings-printer'] as KPState | undefined) ?? DEFAULT_KP_STATE,
 });

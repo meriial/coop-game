@@ -167,6 +167,48 @@ export interface BgConfig {
   params: Record<string, number | string | boolean>;
 }
 
+// ── Kings Printer ────────────────────────────────────────────────────────────
+
+export type KPPhase = 'waiting' | 'playing' | 'finished';
+export type KPDocType = 'proclamation' | 'bill' | 'gazette' | 'patent';
+export type KPStation = 'queue' | 'typeset' | 'press' | 'deliver';
+
+export interface KPDocument {
+  id: string;
+  docType: KPDocType;
+  /** 0=needs typeset, 1=needs press, 2=ready to deliver */
+  step: number;
+  holderId: string | null;
+  expiresAt: number;
+}
+
+export interface KPPlayerState {
+  playerKey: string;
+  name: string;
+  color: string;
+  station: KPStation | null;
+  holdingId: string | null;
+  score: number;
+}
+
+export interface KPState {
+  kpPhase: KPPhase;
+  kpPlayers: KPPlayerState[];
+  kpDocuments: KPDocument[];
+  kpScore: number;
+  kpFailed: number;
+  kpTimeRemaining: number;
+}
+
+export const DEFAULT_KP_STATE: KPState = {
+  kpPhase: 'waiting',
+  kpPlayers: [],
+  kpDocuments: [],
+  kpScore: 0,
+  kpFailed: 0,
+  kpTimeRemaining: 180,
+};
+
 export type InboundMsg =
   | { type: 'STEP_CHANGE'; stepIndex: number }
   | { type: 'SUBMIT_VOTE'; pollId: string; choice: string; pollType?: string }
@@ -193,10 +235,13 @@ export type InboundMsg =
   | { type: 'MATCH_SET_ACTIVE_WINDOW'; seconds: number }
   | { type: 'MATCH_CLEAR_LEADERBOARD' }
   | { type: 'BG_CONFIG'; config: BgConfig }
-  | { type: 'RELOAD_CLIENTS' };
+  | { type: 'RELOAD_CLIENTS' }
+  | { type: 'KP_GOTO'; station: KPStation }
+  | { type: 'KP_START' }
+  | { type: 'KP_RESET' };
 
 export type OutboundMsg =
-  | ({ type: 'WELCOME'; stepIndex: number; role: string; pollResults: Record<string, Record<string, number>>; pollValues: Record<string, string[]>; bgConfig: BgConfig | null } & CanvasState & MatchState)
+  | ({ type: 'WELCOME'; stepIndex: number; role: string; pollResults: Record<string, Record<string, number>>; pollValues: Record<string, string[]>; bgConfig: BgConfig | null } & CanvasState & MatchState & KPState)
   | { type: 'SYNC_STEP'; stepIndex: number }
   | { type: 'SYNC_BG'; config: BgConfig }
   | { type: 'RELOAD' }
@@ -204,6 +249,7 @@ export type OutboundMsg =
   | { type: 'POLL_RESET'; pollId: string }
   | ({ type: 'SYNC_CANVAS' } & CanvasState)
   | ({ type: 'SYNC_MATCH' } & MatchState)
+  | ({ type: 'SYNC_KP' } & KPState)
   | { type: 'CONNECTED_USERS'; users: ConnectedUser[] };
 
 export interface RoomAttachment {

@@ -12,6 +12,7 @@
     "@workshop/game-core": "file:../packages/game-core",
     "@workshop/game-periodic-match": "file:../packages/games/periodic-match",
     "@workshop/game-pixel-heart": "file:../packages/games/pixel-heart",
+    "@workshop/game-kings-printer": "file:../packages/games/kings-printer",
     "@workshop/protocol": "file:../packages/protocol",
     "lucide-react": "^1.17.0",
     "react": "^19.1.0",

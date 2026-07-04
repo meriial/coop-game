@@ -6,6 +6,7 @@
 @source "../../packages/game-core/src/**/*.{ts,tsx}";
 @source "../../packages/games/periodic-match/src/**/*.{ts,tsx}";
 @source "../../packages/games/pixel-heart/src/**/*.{ts,tsx}";
+@source "../../packages/games/kings-printer/src/**/*.{ts,tsx}";
 
 *, *::before, *::after {
   box-sizing: border-box;

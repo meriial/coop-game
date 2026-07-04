@@ -3,6 +3,7 @@ import { resolvePlayerKey } from '@workshop/protocol';
 import { createGameContext } from '@workshop/game-core/server';
 import { periodicMatchEngine, clearMatchPendingForPlayer } from '@workshop/game-periodic-match/engine';
 import { pixelHeartEngine } from '@workshop/game-pixel-heart/engine';
+import { kingsPrinterEngine } from '@workshop/game-kings-printer/engine';
 import { gameRegistry } from './game-registry';
 
 const PLAYER_COLORS = [
@@ -123,6 +124,7 @@ export class PresentationRoom {
 
     const matchState = periodicMatchEngine.buildState(this.gameCtx);
     const canvasState = pixelHeartEngine.buildState(this.gameCtx);
+    const kpState = kingsPrinterEngine.buildState(this.gameCtx);
     const stepIndex = this.getStepIndex();
     server.send(JSON.stringify({
       type: 'WELCOME',
@@ -130,6 +132,7 @@ export class PresentationRoom {
       role,
       ...canvasState,
       ...matchState,
+      ...kpState,
       pollResults: this.buildAllPollResults(),
       pollValues: this.buildAllPollValues(),
       bgConfig: this.getBgConfig(),
@@ -191,9 +194,11 @@ export class PresentationRoom {
       const player = this.upsertPlayer(attachment, msg.name as string);
       this.broadcast({ type: 'SYNC_CANVAS', ...pixelHeartEngine.buildState(this.gameCtx) });
       this.broadcast({ type: 'SYNC_MATCH', ...periodicMatchEngine.buildState(this.gameCtx) });
+      this.broadcast({ type: 'SYNC_KP', ...kingsPrinterEngine.buildState(this.gameCtx) });
       this.broadcastConnectedUsers();
       periodicMatchEngine.onJoin?.(player, this.gameCtx);
       pixelHeartEngine.onJoin?.(player, this.gameCtx);
+      kingsPrinterEngine.onJoin?.(player, this.gameCtx);
       return;
     }
 
@@ -225,6 +230,7 @@ export class PresentationRoom {
 
   async alarm(): Promise<void> {
     await periodicMatchEngine.onAlarm?.(this.gameCtx);
+    await kingsPrinterEngine.onAlarm?.(this.gameCtx);
   }
 
   webSocketClose(ws: WebSocket): void {

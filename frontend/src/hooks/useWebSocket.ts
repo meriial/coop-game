@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { emptyCanvasState, type MatchState, type CanvasState, type BgConfig } from '@workshop/protocol';
+import { emptyCanvasState, DEFAULT_KP_STATE, type MatchState, type CanvasState, type BgConfig, type KPState } from '@workshop/protocol';
 import '../backgrounds/register';
 import { defaultBgConfig } from '../backgrounds/registry';
 
@@ -24,6 +24,7 @@ const DEFAULT_STATE: WsState = {
   pollValues: {},
   pollResetSeq: {},
   games: {
+    'kings-printer': DEFAULT_KP_STATE satisfies KPState,
     'pixel-heart': emptyCanvasState() satisfies CanvasState,
     'periodic-match': {
       matchBoard: [],
@@ -90,6 +91,17 @@ function patchCanvas(msg: Record<string, unknown>): CanvasState {
   };
 }
 
+function patchKP(msg: Record<string, unknown>): KPState {
+  return {
+    kpPhase: (msg.kpPhase as KPState['kpPhase']) ?? 'waiting',
+    kpPlayers: (msg.kpPlayers as KPState['kpPlayers']) ?? [],
+    kpDocuments: (msg.kpDocuments as KPState['kpDocuments']) ?? [],
+    kpScore: (msg.kpScore as number) ?? 0,
+    kpFailed: (msg.kpFailed as number) ?? 0,
+    kpTimeRemaining: (msg.kpTimeRemaining as number) ?? 180,
+  };
+}
+
 export function useWebSocket(url: string, disabled = false) {
   const [state, setState] = useState<WsState>(DEFAULT_STATE);
   const wsRef = useRef<WebSocket | null>(null);
@@ -130,6 +142,7 @@ export function useWebSocket(url: string, disabled = false) {
                 ...prev.games,
                 'periodic-match': patchPeriodicMatch(msg),
                 'pixel-heart': patchCanvas(msg),
+                'kings-printer': patchKP(msg),
               },
             };
           case 'SYNC_STEP':
@@ -172,6 +185,14 @@ export function useWebSocket(url: string, disabled = false) {
               games: {
                 ...prev.games,
                 'periodic-match': patchPeriodicMatch(msg),
+              },
+            };
+          case 'SYNC_KP':
+            return {
+              ...prev,
+              games: {
+                ...prev.games,
+                'kings-printer': patchKP(msg),
               },
             };
           case 'CONNECTED_USERS':
